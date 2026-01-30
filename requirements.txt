@@ -5,7 +5,7 @@ pandas
 scikit-learn
 scipy
 seaborn
-# torch>=2.0.0
+torch>=2.0.0
 jupyter
 ipykernel
 tqdm

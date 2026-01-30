@@ -5,9 +5,19 @@ from scipy.signal import find_peaks
 import os
 import pickle
 from sklearn.preprocessing import StandardScaler
+import matplotlib.pyplot as plt
+from sklearn.metrics import (
+    accuracy_score,
+    balanced_accuracy_score,
+    confusion_matrix,
+    classification_report,
+    roc_auc_score,
+    roc_curve,
+    PrecisionRecallDisplay
+)
 
 
-def drop_high_nan_columns(df, threshold=0.95):
+def drop_high_nan_columns(df, threshold):
     min_valid_values = (1-threshold)*len(df)
 
     cols_to_drop = df.columns[df.notna().sum() < min_valid_values].tolist()
@@ -289,7 +299,7 @@ def evaluate_knn(model_input, X_test, y_test, model_name=None):
 
 
 
-def apply_capping(df, lower_quantile=0.01, upper_quantile=0.99):
+def apply_capping(df, lower_quantile, upper_quantile):
     """
     Applica la tecnica del Capping (Winsorization) alle colonne numeriche di un DataFrame.
     I valori sotto il lower_quantile vengono sostituiti con il valore del lower_quantile.
@@ -330,7 +340,8 @@ def apply_capping(df, lower_quantile=0.01, upper_quantile=0.99):
 
 
 
-def identify_distributions(df, threshold_skew=1.0, threshold_peaks_prominence=0.05):
+def identify_distributions(df, threshold_skew, threshold_peaks_prominence):
+    # 1 / 0.05
     """
     Identifica se le colonne numeriche sono Skewed, Multimodali, Uniformi o Normali.
     Restituisce un DataFrame con i risultati dell'analisi.
@@ -395,7 +406,8 @@ def identify_distributions(df, threshold_skew=1.0, threshold_peaks_prominence=0.
 
 
 
-def get_distribution_type(data, threshold_skew=1.0, threshold_peaks=0.05):
+def get_distribution_type(data, threshold_skew, threshold_peaks):
+    # 1/0.05
     """
     Funzione helper per identificare il tipo di distribuzione di una singola Series.
     """

@@ -1,7 +1,11 @@
 import pandas as pd
-
+import numpy as np
+from scipy import stats
+from scipy.signal import find_peaks
 import os
 import pickle
+from sklearn.preprocessing import StandardScaler
+
 
 def drop_high_nan_columns(df, threshold=0.95):
     min_valid_values = (1-threshold)*len(df)
@@ -281,3 +285,208 @@ def evaluate_knn(model_input, X_test, y_test, model_name=None):
     plt.show()
 
     return model
+
+
+
+
+def apply_capping(df, lower_quantile=0.01, upper_quantile=0.99):
+    """
+    Applica la tecnica del Capping (Winsorization) alle colonne numeriche di un DataFrame.
+    I valori sotto il lower_quantile vengono sostituiti con il valore del lower_quantile.
+    I valori sopra l'upper_quantile vengono sostituiti con il valore dell'upper_quantile.
+
+    Parametri:
+    - df: DataFrame in input
+    - lower_quantile: soglia inferiore (default 0.01 -> 1%)
+    - upper_quantile: soglia superiore (default 0.99 -> 99%)
+
+    Return:
+    - DataFrame con i valori cappati.
+    """
+    # Creiamo una copia per non modificare l'originale in-place
+    df_capped = df.copy()
+
+    # Selezioniamo solo le colonne numeriche
+    numerical_cols = df_capped.select_dtypes(include=['float', 'int']).columns
+
+    for col in numerical_cols:
+        # Calcolo dei limiti
+        lower_limit = df_capped[col].quantile(lower_quantile)
+        upper_limit = df_capped[col].quantile(upper_quantile)
+
+        # Applicazione del capping (clipping)
+        # I valori < lower_limit diventano lower_limit
+        # I valori > upper_limit diventano upper_limit
+        df_capped[col] = df_capped[col].clip(lower=lower_limit, upper=upper_limit)
+
+        # Opzionale: Stampa per vedere l'effetto (puoi commentarlo)
+        print(f"Colonna '{col}': cappata tra {lower_limit:.2f} e {upper_limit:.2f}")
+
+    return df_capped
+
+
+
+
+
+
+
+def identify_distributions(df, threshold_skew=1.0, threshold_peaks_prominence=0.05):
+    """
+    Identifica se le colonne numeriche sono Skewed, Multimodali, Uniformi o Normali.
+    Restituisce un DataFrame con i risultati dell'analisi.
+    """
+    results = []
+    num_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+
+    for col in num_cols:
+        data = df[col].dropna()
+        if len(data) < 50: continue # Salta colonne con troppi pochi dati
+
+        # 1. Check Skewness (Asimmetria)
+        skew_val = data.skew()
+        is_skewed = abs(skew_val) > threshold_skew
+
+        # 2. Check Normality (Test di D'Agostino's K-squared)
+        try:
+            k2, p_norm = stats.normaltest(data)
+            # p_value > 0.01 e skewness bassa indicano normalità
+            is_normal = (p_norm > 0.01) and (abs(skew_val) < 0.5)
+        except:
+            is_normal = False
+
+        # 3. Check Multimodality (Picchi nell'istogramma)
+        # Calcola la densità approssimata tramite istogramma
+        counts, bin_edges = np.histogram(data, bins='auto', density=True)
+        # Trova picchi che siano rilevanti (almeno il 5% della densità massima)
+        peaks, _ = find_peaks(counts, prominence=np.max(counts) * threshold_peaks_prominence)
+        num_peaks = len(peaks)
+        is_multimodal = num_peaks > 1
+
+        # 4. Check Uniformity (Varianza delle frequenze)
+        # Se la deviazione standard delle frequenze nei bin è molto bassa, è uniforme
+        counts_uni, _ = np.histogram(data, bins=20)
+        cv = np.std(counts_uni) / np.mean(counts_uni)
+        is_uniform = cv < 0.2 # Soglia euristica: deviazione < 20% della media
+
+        # Logica di Classificazione (Priorità)
+        classification = "Unknown"
+        if is_uniform:
+            classification = "Uniform"
+        elif is_multimodal and not is_skewed:
+             # Spesso le code lunghe creano falsi picchi, quindi diamo priorità allo skew
+             classification = "Multimodal"
+        elif is_skewed:
+            classification = "Positively Skewed" if skew_val > 0 else "Negatively Skewed"
+        elif is_normal:
+            classification = "Normal"
+        else:
+             classification = "Symmetric (Non-Normal)"
+
+        results.append({
+            'Feature': col,
+            'Skewness': round(skew_val, 2),
+            'Num_Peaks': num_peaks,
+            'Classification': classification
+        })
+
+    return pd.DataFrame(results)
+
+
+
+
+
+def get_distribution_type(data, threshold_skew=1.0, threshold_peaks=0.05):
+    """
+    Funzione helper per identificare il tipo di distribuzione di una singola Series.
+    """
+    # Rimuoviamo NaN per l'analisi
+    clean_data = data.dropna()
+    if len(clean_data) < 50: return 'Other'
+
+    # 1. Calcolo Skewness
+    skew_val = clean_data.skew()
+
+    # 2. Test Normalità (D'Agostino's K-squared test)
+    try:
+        k2, p_norm = stats.normaltest(clean_data)
+        # Se p > 0.01 e skewness è bassa, consideriamo "Normale"
+        is_normal = (p_norm > 0.01) and (abs(skew_val) < 0.5)
+    except:
+        is_normal = False
+
+    if is_normal:
+        return 'Normal'
+
+    # 3. Controllo Skewness (Priorità alta)
+    if abs(skew_val) > threshold_skew:
+        return 'Skewed'
+
+    # 4. Controllo Multimodalità (Picchi)
+    counts, bin_edges = np.histogram(clean_data, bins='auto', density=True)
+    peaks, _ = find_peaks(counts, prominence=np.max(counts) * threshold_peaks)
+
+    if len(peaks) > 1:
+        return 'Multimodal'
+
+    return 'Other' # Simmetrica ma non normale, o altro
+
+def auto_transform_features(df):
+    """
+    Analizza ogni colonna numerica e applica la trasformazione:
+    - Skewed -> Log Transformation
+    - Normal -> Z-Score Standardization
+    - Multimodal -> Binning (5 Quantiles)
+    """
+    df_clean = df.copy()
+    num_cols = df_clean.select_dtypes(include=[np.number]).columns.tolist()
+    scaler = StandardScaler()
+
+    # Report per tenere traccia delle modifiche
+    report_list = []
+
+    for col in num_cols:
+        # Identifica la distribuzione
+        dist_type = get_distribution_type(df_clean[col])
+        action = "Nessuna azione"
+
+        # --- LOGICA DI TRASFORMAZIONE ---
+
+        if dist_type == 'Skewed':
+            # LOG TRANSFORMATION
+            # Gestione valori negativi/zero: trasliamo se necessario
+            min_val = df_clean[col].min()
+            if min_val <= 0:
+                offset = abs(min_val) + 1
+                df_clean[col] = np.log(df_clean[col] + offset)
+                action = f"Log Transform (Shifted +{offset})"
+            else:
+                df_clean[col] = np.log(df_clean[col])
+                action = "Log Transform"
+
+        elif dist_type == 'Normal':
+            # Z-SCORE STANDARDIZATION
+            # Reshape necessario per StandardScaler (n_samples, 1)
+            values = df_clean[col].values.reshape(-1, 1)
+            df_clean[col] = scaler.fit_transform(values)
+            action = "Z-Score Standardization"
+
+        elif dist_type == 'Multimodal':
+            # BINNING
+            # Usiamo qcut per dividere in 5 quantili (0,1,2,3,4)
+            # duplicates='drop' gestisce casi in cui molti valori sono identici
+            try:
+                df_clean[col] = pd.qcut(df_clean[col], q=5, labels=False, duplicates='drop')
+                action = "Binning (5 Quantiles)"
+            except Exception as e:
+                action = f"Binning Fallito: {e}"
+
+        # Salviamo il report
+        report_list.append({
+            'Feature': col,
+            'Tipo Rilevato': dist_type,
+            'Trasformazione': action
+        })
+
+    report_df = pd.DataFrame(report_list)
+    return df_clean, report_df
+

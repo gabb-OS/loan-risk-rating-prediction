@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 from scipy import stats
 from scipy.signal import find_peaks
+import seaborn as sns
 import os
 import pickle
 from sklearn.preprocessing import StandardScaler
@@ -10,12 +11,12 @@ from sklearn.metrics import (
     accuracy_score,
     balanced_accuracy_score,
     confusion_matrix,
+    ConfusionMatrixDisplay,
     classification_report,
     roc_auc_score,
     roc_curve,
     PrecisionRecallDisplay
 )
-
 
 def drop_high_nan_columns(df, threshold):
     min_valid_values = (1-threshold)*len(df)
@@ -121,180 +122,56 @@ def calculate_outlier_percentage(df):
     return results_df
 
 
-def evaluate_model(model_input, X_test, y_test, model_name=None):
+def evaluate_model(X_val_raw, y_val_true, prefix):
     """
-    Valuta un modello, stampa i parametri migliori e mostra la matrice di confusione.
-    Accetta: oggetti GridSearchCV, Pipeline/Stimatori o percorsi file (.save).
+    prefix: "knn" o "svc" a seconda dei file salvati
     """
-    params = None
-
-    # 1. Gestione dell'input (File, GridSearch o Modello diretto)
-    if isinstance(model_input, str):
-        # Caricamento da FILE
-        if not os.path.exists(model_input):
-            print(f"Errore: Il file '{model_input}' non esiste.")
-            return None, None
-        with open(model_input, "rb") as f:
-            model = pickle.load(f)
-        if model_name is None: model_name = f"File: {model_input}"
-        # Per i file caricati, prendiamo i parametri attuali dell'oggetto
-        params = model.get_params() if hasattr(model, 'get_params') else "Non disponibili"
-
-    elif isinstance(model_input, GridSearchCV):
-        # Input è l'oggetto GRID SEARCH
-        model = model_input.best_estimator_
-        params = model_input.best_params_ # Qui abbiamo i parametri specifici scelti dalla ricerca
-        if model_name is None: model_name = "Best GridSearch Model"
-
-    else:
-        # Input è il MODELLO/PIPELINE in memoria
-        model = model_input
-        params = model.get_params() if hasattr(model, 'get_params') else "Non disponibili"
-        if model_name is None: model_name = "Model in memory"
-
-    # 2. Predizione
-    y_pred = model.predict(X_test)
-
-    # 3. Probabilità/Score per metriche future
-    y_prob = None
-    if hasattr(model, "predict_proba"):
-        y_prob = model.predict_proba(X_test)
-    elif hasattr(model, "decision_function"):
-        y_prob = model.decision_function(X_test)
-
-    # --- OUTPUT ---
-    print(f"\n{'='*30}")
-    print(f" EVALUATION: {model_name}")
-    print(f"{'='*30}")
-
-    # STAMPA PARAMETRI
-    print("\n>>> BEST/CURRENT PARAMETERS:")
-    if isinstance(params, dict):
-        # Stampiamo solo i parametri salienti (quelli che iniziano con 'clf__')
-        # per non intasare l'output con i parametri dello scaler o di SMOTE
-        relevant_params = {k: v for k, v in params.items() if 'clf__' in k or not '__' in k}
-        for k, v in relevant_params.items():
-            print(f"  - {k}: {v}")
-    else:
-        print(f"  {params}")
-
-    print("\n--- CLASSIFICATION REPORT ---")
-    print(classification_report(y_test, y_pred))
-    print(f"Accuracy: {accuracy_score(y_test, y_pred):.4f}")
-    print(f"Balanced Accuracy: {balanced_accuracy_score(y_test, y_pred):.4f}")
-
-    # --- MATRICE DI CONFUSIONE ---
-    cm = confusion_matrix(y_test, y_pred)
-    plt.figure(figsize=(7, 5))
-    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues')
-    classes = sorted(list(set(y_test)))
-    plt.xticks(ticks=[i + 0.5 for i in range(len(classes))], labels=classes)
-    plt.yticks(ticks=[i + 0.5 for i in range(len(classes))], labels=classes, rotation=0)
-    plt.title(f"Confusion Matrix: {model_name}")
-    plt.show()
-
-    return
-
-
-def evaluate_knn(model_input, X_test, y_test, model_name=None):
-    """
-    Valuta un modello KNN, stampa i parametri specifici (K, pesi, metrica) 
-    e mostra la matrice di confusione.
-    
-    Args:
-        model_input: Può essere un percorso file (.pkl), un oggetto GridSearchCV o un Estimator/Pipeline.
-        X_test: Feature di test (IMPORTANTE: Devono essere scalate se il modello non è una Pipeline che include lo scaling).
-        y_test: Target reali.
-        model_name: Nome opzionale per il grafico.
-    """
-    params = None
-    model = None
-    k_value = "?"
-
-    # 1. Gestione dell'input (File, GridSearch o Modello diretto)
-    if isinstance(model_input, str):
-        # Caricamento da FILE
-        if not os.path.exists(model_input):
-            print(f"Errore: Il file '{model_input}' non esiste.")
-            return
-        with open(model_input, "rb") as f:
-            model = pickle.load(f)
-        if model_name is None: model_name = f"File: {os.path.basename(model_input)}"
-        params = model.get_params()
-
-    elif isinstance(model_input, GridSearchCV):
-        # Input è l'oggetto GRID SEARCH
-        model = model_input.best_estimator_
-        params = model_input.best_params_
-        if model_name is None: model_name = "Best KNN (GridSearch)"
-
-    else:
-        # Input è il MODELLO/PIPELINE in memoria
-        model = model_input
-        params = model.get_params()
-        if model_name is None: model_name = "KNN Model"
-
-    # 2. Predizione
+    # 1. Caricamento dinamico dei file
     try:
-        y_pred = model.predict(X_test)
-    except Exception as e:
-        print(f"Errore durante la predizione: {e}")
+        with open(f"{prefix}_scaler.save", "rb") as f:
+            scaler = pickle.load(f)
+        with open(f"{prefix}_pca.save", "rb") as f:
+            pca = pickle.load(f)
+        with open(f"{prefix}.save", "rb") as f:
+            model = pickle.load(f)
+    except FileNotFoundError as e:
+        print(f"Errore: File con prefisso '{prefix}' non trovati. {e}")
         return
 
-    # 3. Estrazione parametri rilevanti per KNN
-    # Cerchiamo di isolare i parametri chiave del KNN anche se è dentro una Pipeline
-    knn_params = {}
-    if isinstance(params, dict):
-        # Lista di keyword tipiche del KNN
-        target_keys = ['n_neighbors', 'weights', 'metric', 'p', 'leaf_size', 'algorithm']
-        
-        for k, v in params.items():
-            # Controlla se la chiave corrisponde o finisce con una delle target_keys (es. 'knn__n_neighbors')
-            if any(key in k.split('__')[-1] for key in target_keys):
-                clean_key = k.split('__')[-1] # Rimuove il prefisso della pipeline se c'è
-                knn_params[clean_key] = v
-                if clean_key == 'n_neighbors':
-                    k_value = v
+    print(f"========================================")
+    print(f"REPORT VALUTAZIONE: {prefix.upper()}")
+    print(f"========================================")
     
-    # --- OUTPUT ---
-    print(f"\n{'='*40}")
-    print(f" KNN EVALUATION: {model_name}")
-    print(f"{'='*40}")
-
-    # STAMPA PARAMETRI
-    print("\n>>> CONFIGURAZIONE KNN:")
-    if knn_params:
-        for k, v in knn_params.items():
-            print(f"  - {k}: {v}")
+    # 2. Stampa parametri specifici per tipo di modello
+    print(f"Scaler usato: {type(scaler).__name__}")
+    print(f"Componenti PCA: {pca.n_components_} ({pca.explained_variance_ratio_.sum():.2%} varianza)")
+    
+    if prefix == "knn":
+        print(f"Parametri KNN: n_neighbors={model.n_neighbors}, weights='{model.weights}', metric='{model.metric}'")
     else:
-        print("  Parametri specifici non trovati (o modello custom).")
-        print(f"  Dump parametri completi: {params}")
+        print(f"Parametri SVC: C={model.C}, kernel='{getattr(model, 'kernel', 'linear')}', class_weight='{model.class_weight}'")
+    
+    print(f"----------------------------------------\n")
 
-    print("\n--- CLASSIFICATION REPORT ---")
-    print(classification_report(y_test, y_pred))
-    
-    acc = accuracy_score(y_test, y_pred)
-    bal_acc = balanced_accuracy_score(y_test, y_pred)
-    
-    print(f"Accuracy: {acc:.4f}")
-    print(f"Balanced Accuracy: {bal_acc:.4f}")
+    # 3. Trasformazione e Predizione (struttura identica)
+    X_scaled = scaler.transform(X_val_raw)
+    X_pca = pca.transform(X_scaled)
+    y_pred = model.predict(X_pca)
 
-    # --- MATRICE DI CONFUSIONE ---
-    cm = confusion_matrix(y_test, y_pred)
-    plt.figure(figsize=(8, 6))
-    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', cbar=False)
+    # 4. Metriche
+    print("CLASSIFICATION REPORT:")
+    print(classification_report(y_val_true, y_pred))
     
-    classes = sorted(list(set(y_test)))
-    # Centratura labels
-    plt.xticks(ticks=[i + 0.5 for i in range(len(classes))], labels=classes)
-    plt.yticks(ticks=[i + 0.5 for i in range(len(classes))], labels=classes, rotation=0)
-    
-    plt.xlabel('Predicted Label')
-    plt.ylabel('True Label')
-    plt.title(f"Confusion Matrix: {model_name}\n(K={k_value}, Acc={acc:.2f})")
+    print(f"Accuracy Score:          {accuracy_score(y_val_true, y_pred):.4f}")
+    print(f"Balanced Accuracy Score: {balanced_accuracy_score(y_val_true, y_pred):.4f}")
+
+    # 5. Matrice di Confusione
+    cm = confusion_matrix(y_val_true, y_pred)
+    fig, ax = plt.subplots(figsize=(8, 6))
+    disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=model.classes_)
+    disp.plot(cmap='Greens' if prefix == "knn" else 'Blues', ax=ax, values_format='d')
+    plt.title(f'Confusion Matrix - {prefix.upper()}')
     plt.show()
-
-    return model
 
 
 
@@ -407,7 +284,7 @@ def identify_distributions(df, threshold_skew, threshold_peaks_prominence):
 
 
 def get_distribution_type(data, threshold_skew, threshold_peaks):
-    # 1/0.05
+    # 1/0.05z
     """
     Funzione helper per identificare il tipo di distribuzione di una singola Series.
     """

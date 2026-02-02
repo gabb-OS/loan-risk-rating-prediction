@@ -9,6 +9,7 @@ torch>=2.0.0
 jupyter
 ipykernel
 tqdm
+
 # Deep Tabular Models
 pytorch-tabnet
 tab-transformer-pytorch
@@ -17,3 +18,4 @@ tab-transformer-pytorch
 
 ## added by us
 imbalanced-learn
+tensorboard			# Torch SummaryWriter

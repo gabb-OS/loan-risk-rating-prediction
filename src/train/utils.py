@@ -124,52 +124,86 @@ def calculate_outlier_percentage(df):
 
 def evaluate_model(X_val_raw, y_val_true, prefix):
     """
-    prefix: "knn" o "svc" a seconda dei file salvati
+    Carica dinamicamente i componenti disponibili e valuta il modello.
+    Se scaler o pca non esistono per il prefisso specificato, vengono saltati.
     """
-    # 1. Caricamento dinamico dei file
+    
+    # 1. Caricamento condizionale dei file
+    scaler = None
+    pca = None
+    model = None
+
     try:
-        with open(f"{prefix}_scaler.save", "rb") as f:
-            scaler = pickle.load(f)
-        with open(f"{prefix}_pca.save", "rb") as f:
-            pca = pickle.load(f)
+        # Il modello è l'unico file obbligatorio
         with open(f"{prefix}.save", "rb") as f:
             model = pickle.load(f)
-    except FileNotFoundError as e:
-        print(f"Errore: File con prefisso '{prefix}' non trovati. {e}")
+        
+        # Carica scaler se esiste
+        if os.path.exists(f"{prefix}_scaler.save"):
+            with open(f"{prefix}_scaler.save", "rb") as f:
+                scaler = pickle.load(f)
+        
+        # Carica pca se esiste
+        if os.path.exists(f"{prefix}_pca.save"):
+            with open(f"{prefix}_pca.save", "rb") as f:
+                pca = pickle.load(f)
+                
+    except Exception as e:
+        print(f"Errore durante il caricamento dei file per '{prefix}': {e}")
         return
 
     print(f"========================================")
     print(f"REPORT VALUTAZIONE: {prefix.upper()}")
     print(f"========================================")
     
-    # 2. Stampa parametri specifici per tipo di modello
-    print(f"Scaler usato: {type(scaler).__name__}")
-    print(f"Componenti PCA: {pca.n_components_} ({pca.explained_variance_ratio_.sum():.2%} varianza)")
-    
+    # 2. Informazioni sulla Pipeline rilevata
+    print(f"Pre-processing: ", end="")
+    steps = []
+    if scaler: steps.append(f"Scaler ({type(scaler).__name__})")
+    if pca: steps.append(f"Componenti PCA: {pca.n_components_} ({pca.explained_variance_ratio_.sum():.2%} varianza)")
+    print(" -> ".join(steps) if steps else "Nessuno (Dati Raw)")
+
+    # 3. Parametri specifici del modello
     if prefix == "knn":
-        print(f"Parametri KNN: n_neighbors={model.n_neighbors}, weights='{model.weights}', metric='{model.metric}'")
-    else:
-        print(f"Parametri SVC: C={model.C}, kernel='{getattr(model, 'kernel', 'linear')}', class_weight='{model.class_weight}'")
+        print(f"Parametri: n_neighbors={model.n_neighbors}, metric='{model.metric}'")
+    elif prefix == "svc":
+        m_iter = getattr(model, 'max_iter', 'Default')
+        print(f"Parametri SVC: C={model.C}, kernel='{getattr(model, 'kernel', 'linear')}', max_iter={m_iter}")
+    elif prefix == "rf":
+        print(f"Parametri RF:")
+        print(f" - n_estimators: {model.n_estimators}")
+        print(f" - max_features: {model.max_features}")
+        print(f" - criterion:    {model.criterion}")
+        print(f" - max_depth:    {model.max_depth}")
+        print(f" - class_weight: {model.class_weight}")
     
     print(f"----------------------------------------\n")
 
-    # 3. Trasformazione e Predizione (struttura identica)
-    X_scaled = scaler.transform(X_val_raw)
-    X_pca = pca.transform(X_scaled)
-    y_pred = model.predict(X_pca)
+    # 4. Trasformazione condizionale dei dati
+    X_transformed = X_val_raw.copy()
+    
+    if scaler:
+        X_transformed = scaler.transform(X_transformed)
+    
+    if pca:
+        X_transformed = pca.transform(X_transformed)
+        
+    y_pred = model.predict(X_transformed)
 
-    # 4. Metriche
+    # 5. Metriche
     print("CLASSIFICATION REPORT:")
     print(classification_report(y_val_true, y_pred))
     
     print(f"Accuracy Score:          {accuracy_score(y_val_true, y_pred):.4f}")
     print(f"Balanced Accuracy Score: {balanced_accuracy_score(y_val_true, y_pred):.4f}")
 
-    # 5. Matrice di Confusione
+    # 6. Matrice di Confusione
     cm = confusion_matrix(y_val_true, y_pred)
     fig, ax = plt.subplots(figsize=(8, 6))
+    
+    colors = {'knn': 'Greens', 'svc': 'Blues', 'rf': 'Oranges'}
     disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=model.classes_)
-    disp.plot(cmap='Greens' if prefix == "knn" else 'Blues', ax=ax, values_format='d')
+    disp.plot(cmap=colors.get(prefix, 'Purples'), ax=ax, values_format='d')
     plt.title(f'Confusion Matrix - {prefix.upper()}')
     plt.show()
 

@@ -1,4 +1,4 @@
-MY_UNIQUE_ID = "TestUser"
+MY_UNIQUE_ID = "DaiCheOggiLaChiudiamo"
 
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.linear_model import LogisticRegression
@@ -11,6 +11,16 @@ import pandas as pd
 import numpy as np
 import os
 
+'''
+Il campo clfName è una stringa con i seguenti valori ammissibili:
+- 'knn' → identifica classificatore K-Nearest Neighbour
+- 'rf' → identifica classificatore Random Forest
+- 'svm' → identifica classificatore Support Vector Machine
+- 'ff' → identificare classificatore con reti neurali, architettura Feed Forward
+- 'tb' → identificare classificatore con reti neurali, architettura TabNet
+- 'tf' → identificare classificatore con reti neurali, architettura TabTransformer
+'''
+
 # Output: unique ID of the team
 def getName():
     return MY_UNIQUE_ID
@@ -19,8 +29,10 @@ def getName():
 # Input: Dataset dictionary and classifier name
 # Output: PreProcessed Dataset dictionary
 def preprocess(dataset, clfName):
-    X = dataset['data']
-    y = dataset['target']
+    X = dataset.drop(columns=["grade"])
+    y = dataset["grade"]
+
+    
 
     # Drop NA rows from both data and target
 
@@ -28,12 +40,18 @@ def preprocess(dataset, clfName):
     dataset_processed = {}
     scaler = None
     
-    if clfName == "lr":
-        scaler = pickle.load(open("lr_scaler.save", 'rb'))
-        
-    elif 
-    
-    elif 
+    if clfName == "rf":
+        scaler = pickle.load(open("rf_scaler.save", 'rb'))    
+    elif clfName == "svm":
+        scaler = pickle.load(open("svm_scaler.save", 'rb'))
+    elif clfName == "knn":
+        scaler = pickle.load(open("knn_scaler.save", 'rb'))
+    elif clfName == "ff":
+        scaler = pickle.load(open("ff_scaler.save", 'rb'))
+    elif clfName == "tb":
+        scaler = pickle.load(open("tb_scaler.save", 'rb'))
+    elif clfName == "tt":
+        scaler = pickle.load(open("tt_scaler.save", 'rb'))
         
 
     if scaler is not None:
@@ -48,12 +66,18 @@ def preprocess(dataset, clfName):
 def load(clfName):
     clf = None
     
-    if (clfName == "lr"):
-        clf = pickle.load(open("lr.save", 'rb'))
-        
-    elif 
-
-    elif 
+    if clfName == "rf":
+        clf = pickle.load(open("rf.save", 'rb'))    
+    elif clfName == "svm":
+        clf = pickle.load(open("svm.save", 'rb'))
+    elif clfName == "knn":
+        clf = pickle.load(open("knn.save", 'rb'))
+    elif clfName == "ff":
+        clf = pickle.load(open("ff.save", 'rb'))
+    elif clfName == "tb":
+        clf = pickle.load(open("tb.save", 'rb'))
+    elif clfName == "tt":
+        clf = pickle.load(open("tt.save", 'rb'))
 
     return clf
 

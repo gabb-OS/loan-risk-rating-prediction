@@ -35,6 +35,7 @@ def drop_high_nan_columns(df, threshold):
 def print_nan(df, types=None):
     """
     Esplora i NaN e i valori univoci (mostrando i valori effettivi) per ogni feature.
+    Mostra solo le colonne che contengono almeno un valore NaN.
     """
     # Selezione colonne per tipo
     if types:
@@ -50,6 +51,11 @@ def print_nan(df, types=None):
     for col in selected_cols:
         # Calcolo metriche per la colonna
         nan_count = working_df[col].isna().sum()
+        
+        # Salta le colonne senza NaN
+        if nan_count == 0:
+            continue
+            
         nan_perc = (nan_count / len(df)) * 100
         dtype = working_df[col].dtype
 
@@ -74,10 +80,13 @@ def print_nan(df, types=None):
         })
 
     # Creazione e ordinamento della tabella
-    nan_table = pd.DataFrame(data).sort_values(by='Uniques Count')
-
-    # Stampa con formattazione migliorata
-    print(nan_table.to_string(index=False))
+    if data:  # Verifica che ci siano dati da mostrare
+        nan_table = pd.DataFrame(data).sort_values(by='Uniques Count')
+        # Stampa con formattazione migliorata
+        print(nan_table.to_string(index=False))
+    else:
+        print("Nessuna colonna contiene valori NaN.")
+    
     return
 
 
@@ -413,3 +422,82 @@ def auto_transform_features(df):
     report_df = pd.DataFrame(report_list)
     return df_clean, report_df
 
+
+
+
+
+
+def higly_correlated_numeric_features(df, threshold):
+    numeric_df = df.select_dtypes(include=[np.number])
+    corr_matrix = numeric_df.corr()
+    columns = corr_matrix.columns
+    correlations_dict = {}
+
+    for i in range(len(columns)):
+        for j in range(i + 1, len(columns)):
+            col_a = columns[i]
+            col_b = columns[j]
+            val = corr_matrix.iloc[i, j]
+            
+            if abs(val) >= threshold:
+                if col_a not in correlations_dict:
+                    correlations_dict[col_a] = []
+                # Indica chiaramente il segno della correlazione
+                sign = "+" if val > 0 else "-"
+                correlations_dict[col_a].append(f"{col_b} ({sign}{abs(val):.2f})")
+    
+    if not correlations_dict:
+        print(f"Nessuna correlazione trovata sopra la soglia di {threshold}")
+    else:
+        print(f"--- Colonne con correlazione assoluta >= {threshold} ---")
+        for col, matches in correlations_dict.items():
+            print(f"{col} correla con: {', '.join(matches)}")
+
+
+
+
+def round_features_to_int(df, features):
+    """
+    Arrotonda all'intero più vicino i valori delle feature specificate.
+    
+    Parametri:
+    -----------
+    df : pd.DataFrame
+        Il DataFrame da processare
+    features : list
+        Lista di nomi delle colonne da arrotondare
+    
+    Ritorna:
+    --------
+    pd.DataFrame
+        DataFrame con le feature arrotondate
+    """
+    # Crea una copia del DataFrame per non modificare l'originale
+    df_rounded = df.copy()
+    
+    # Arrotonda ogni feature nella lista
+    for feature in features:
+        if feature in df_rounded.columns:
+            df_rounded[feature] = np.round(df_rounded[feature]).astype(int)
+        else:
+            print(f"Warning: '{feature}' non trovata nel DataFrame")
+    
+    return df_rounded
+
+
+
+def drop_constant_columns(df):
+    """
+    Rimuove le colonne che hanno un solo valore univoco in tutto il dataset.
+    """
+    constant_cols = [col for col in df.columns if df[col].nunique(dropna=False) <= 1]
+    df.drop(columns=constant_cols, inplace=True)
+    
+    print("\n--- Report Colonne Costanti ---")
+    if constant_cols:
+        for col in constant_cols:
+            print(f"Dropping colonna costante: {col}")
+    else:
+       print("Nessuna colonna monovalore trovata.")
+
+    return

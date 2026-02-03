@@ -32,6 +32,19 @@ def drop_high_nan_columns(df, threshold):
     return df.dropna(thresh=min_valid_values, axis=1)
 
 
+def print_high_nan_columns(df, threshold):
+    min_valid_values = (1-threshold)*len(df)
+
+    cols_to_drop = df.columns[df.notna().sum() < min_valid_values].tolist()
+
+    if cols_to_drop:
+        print(f"Colonne con > {threshold*100}% NaN:")
+        print(cols_to_drop)
+    else:
+        print("Nessuna colonna rimossa.")
+    return
+
+
 def print_nan(df, types=None):
     """
     Esplora i NaN e i valori univoci (mostrando i valori effettivi) per ogni feature.

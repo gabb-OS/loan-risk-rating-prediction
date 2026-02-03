@@ -11,6 +11,7 @@ import pandas as pd
 import numpy as np
 import os
 
+from preprocessing import *
 '''
 Il campo clfName è una stringa con i seguenti valori ammissibili:
 - 'knn' → identifica classificatore K-Nearest Neighbour
@@ -29,9 +30,28 @@ def getName():
 # Input: Dataset dictionary and classifier name
 # Output: PreProcessed Dataset dictionary
 def preprocess(dataset, clfName):
+
+    # Drop duplicates
+    remove_duplicates(dataset)
+
     X = dataset.drop(columns=["grade"])
     y = dataset["grade"]
 
+    # Drop columns 
+    drop_leakage_and_non_significant_cols(X)
+    drop_high_nan_cols(X)
+    drop_joint_and_secondary_cols(X)
+    drop_higly_correlated_numeric_features(X)
+
+    # Feature extraction
+    feature_extraction(X)
+
+    # Rounding features
+    round_features_to_int(X)
+
+    # NaN management
+    nan_management_general_fill(X)
+    nan_management_imputation_fill(X)
     
 
     # Drop NA rows from both data and target

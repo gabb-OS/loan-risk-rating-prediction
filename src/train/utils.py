@@ -478,7 +478,7 @@ def round_features_to_int(df, features):
     # Arrotonda ogni feature nella lista
     for feature in features:
         if feature in df_rounded.columns:
-            df_rounded[feature] = np.round(df_rounded[feature]).astype(int)
+            df_rounded[feature] = np.round(df_rounded[feature]).astype('Int64')
         else:
             print(f"Warning: '{feature}' non trovata nel DataFrame")
     

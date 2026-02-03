@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+from sklearn.impute import SimpleImputer
 
 ####################################################################################################
 
@@ -122,6 +123,33 @@ redundant_features = [
     'total_high_credit_limit',
     'total_installment_high_credit_limit',
     'revolving_tradelines_balance_gt_0',
+]
+
+fill_to_mode_cat = [
+    'disbursement_method_type',
+    'application_type_label',
+    'listing_initial_status',
+    'loan_payment_plan_flag'         # n/y
+]
+
+fill_to_mode_num = [
+    'loan_contract_term_months'    # 36/60 mesi
+]
+
+numerical_to_median = [
+    'borrower_profile_employment_length', 'fico_average', 'borrower_income_annual', 
+    'borrower_dti_ratio', 'loan_contract_approved_amount', 'average_current_balance', 
+    'revolving_balance', 'total_current_balance', 'total_bankcard_credit_limit', 
+    'total_revolving_high_credit_limit', 'bankcard_open_to_buy', 'bankcard_max_balance', 
+    'total_balance_installment_loans', 'months_since_earliest_cr_line', 
+    'months_since_oldest_installment_acct', 'months_since_oldest_revolving_acct', 
+    'months_since_recent_revolving_acct', 'revolving_utilization', 'bankcard_utilization', 
+    'overall_utilization', 'installment_utilization', 'bankcard_util_gt_75_ratio', 
+    'tradelines_never_delinquent_ratio', 'total_balance_ex_mortgage', 'months_since_recent_installment_loan',
+]
+
+skewed_cols = [
+
 ]
 
 ####################################################################################################
@@ -261,8 +289,8 @@ def round_features_to_int(X):
     return
 
 
-def nan_management(X):
-    print("\n Inizio gestione NaN...")
+def nan_management_general_fill(X):
+    print("\n Inizio gestione NaN generici...")
 
     # Feature categoriche in cui i valori NaN sono riempiti con una nuova label Unknown
     X[categorical_to_unknown_cols] = X[categorical_to_unknown_cols].fillna('unknown')
@@ -274,7 +302,65 @@ def nan_management(X):
     # 2. FILL con 0 (se non e' presente, allora equivale a mai/nessuno -> 0)
     X[fill_zero_cols] = X[fill_zero_cols].fillna(0)
 
-    print("\n Fine gestione NaN")
+    print("\n Fine gestione NaN generici")
     return
 
+
+def nan_management_imputation_fill(X):
+    print("\n Inizio gestione NaN con imputation...")
+
+    # Feature categoriche in cui i valori NaN possono essere riempiti con la moda:
+    # valori con 2 etichette, in cui la mancanza di un dato viene trattato come "no" o come occorrenza piu' frequente
+    cat_imputer = SimpleImputer(strategy='most_frequent')
+    cat_imputer.fit(X[fill_to_mode_cat])
+    X[fill_to_mode_cat] = cat_imputer.transform(X[fill_to_mode_cat])
+
+    num_imputer = SimpleImputer(strategy='most_frequent')
+    num_imputer.fit(X[fill_to_mode_num])
+    X[fill_to_mode_num] = num_imputer.transform(X[fill_to_mode_num])
+
+
+    # Feature da fillare con mediana
+    imputer = SimpleImputer(strategy='median')
+    imputer.fit(X[numerical_to_median])
+    X[numerical_to_median] = imputer.transform(X[numerical_to_median])
+
+    print("\n Fine gestione NaN con imputation")
+    return
+
+
+def apply_capping(X):
+    print("\n Inzio capping feature numeriche...")    
+    lower_quantile = 0.01
+    upper_quantile = 0.99
+    # Selezioniamo solo le colonne numeriche
+    numerical_cols = X.select_dtypes(include=['float', 'int']).columns
+
+    for col in numerical_cols:
+        lower_limit = X[col].quantile(lower_quantile)
+        upper_limit = X[col].quantile(upper_quantile)
+
+        # Applicazione del capping (clipping)
+        X[col] = X[col].clip(lower=lower_limit, upper=upper_limit)
+
+        print("\n Fine capping feature numeriche")
+
+    return
+
+
+
+def apply_log_transform_on_skewed_cols(X):
+    print("\n Inzio log transformation...")   
+    ###TODO
+    
+    for col in skewed_cols:
+        # Verifica che non ci siano valori negativi prima di applicare il log
+        if (X[col] >= 0).all():
+            X[col] = np.log1p(X[col])
+        else:
+            print(f"Salto {col}: contiene valori negativi (impossibile applicare log).")
+    
+    print("\n Fine log transformation")
+
+    return
 

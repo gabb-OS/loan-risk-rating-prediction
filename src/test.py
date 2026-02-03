@@ -52,10 +52,13 @@ def preprocess(dataset, clfName):
     # NaN management
     nan_management_general_fill(X)
     nan_management_imputation_fill(X)
-    
 
-    # Drop NA rows from both data and target
+    # Outliers management
+    apply_capping(X)
+    apply_log_transform_on_skewed_cols(X)
 
+    #### TODO: ENCODING
+    #here encoding
 
     dataset_processed = {}
     scaler = None
@@ -75,8 +78,15 @@ def preprocess(dataset, clfName):
         
 
     if scaler is not None:
-        dataset_processed['data'] = scaler.transform(X)
-        dataset_processed['target'] = y
+        dataset_processed = scaler.transform(X)
+        dataset_processed['grade'] = y
+    else:
+        # ????? TODO CHECK
+        dataset_processed = X
+        dataset_processed["grade"] = y
+
+
+
     
     return dataset_processed
 

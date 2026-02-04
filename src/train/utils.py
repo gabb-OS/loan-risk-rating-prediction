@@ -17,6 +17,8 @@ from sklearn.metrics import (
     roc_curve,
     PrecisionRecallDisplay
 )
+import torch
+from torch import nn
 
 def drop_high_nan_columns(df, threshold):
     # percentuale di NaN per colonna
@@ -197,8 +199,17 @@ def evaluate_model(X_val_raw, y_val_true, prefix):
 
     # 3. Parametri specifici del modello (RF, KNN, SVC...)
     if prefix == "rf":
-        print(f"Parametri RF: n_estimators={model.n_estimators}, max_depth={model.max_depth}, class_weight={model.class_weight}")
-    # ... (mantieni i tuoi blocchi elif per knn e svc qui) ...
+        print(f"Parametri RF: n_estimators={model.n_estimators}, max_depth={model.max_depth}, criterion={model.criterion}. class_weight={model.class_weight}")
+    elif prefix == "svc":
+        m_iter = getattr(model, 'max_iter', 'Default')
+        print(f"Parametri SVC: C={model.C}, kernel='{getattr(model, 'kernel', 'linear')}', max_iter={m_iter}")
+    elif prefix == "rf":
+        print(f"Parametri RF:")
+        print(f" - n_estimators: {model.n_estimators}")
+        print(f" - max_features: {model.max_features}")
+        print(f" - criterion:    {model.criterion}")
+        print(f" - max_depth:    {model.max_depth}")
+        print(f" - class_weight: {model.class_weight}")
     
     print(f"----------------------------------------\n")
 
@@ -531,3 +542,51 @@ def drop_constant_columns(df):
        print("Nessuna colonna monovalore trovata.")
 
     return
+
+
+
+
+def getDevice():
+    if torch.backends.mps.is_available():
+        print("MPS device is available.")
+        device = torch.device("mps")
+    elif torch.cuda.is_available():
+        print("CUDA device is available.")
+        device = torch.device("cuda")
+    else:
+        print("No GPU acceleration available.")
+        device = torch.device("cpu")
+
+
+
+
+class FeedForward_NN(nn.Module):
+    def __init__(self, input_size, num_classes, hidden_size, dropout_rate, depth=1):
+        super(FeedForward_NN, self).__init__()
+
+        model = [
+            nn.Linear(input_size, hidden_size),
+            nn.BatchNorm1d(hidden_size),
+            nn.ReLU(),
+            nn.Dropout(p=dropout_rate)
+        ]
+
+        block = [
+            nn.Linear(hidden_size, hidden_size),
+            nn.BatchNorm1d(hidden_size),
+            nn.ReLU(),
+            nn.Dropout(p=dropout_rate)
+        ]
+
+        for i in range(depth):
+            model += block
+
+        self.model = nn.Sequential(*model)
+
+        self.output = nn.Linear(hidden_size, num_classes)
+
+
+    def forward(self, x):
+        h = self.model(x)
+        out = self.output(h)
+        return out

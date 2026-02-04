@@ -1,4 +1,4 @@
-MY_UNIQUE_ID = "DaiCheOggiLaChiudiamo"
+MY_UNIQUE_ID = "AprileTassi"
 
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.linear_model import LogisticRegression
@@ -6,10 +6,14 @@ from sklearn.svm import SVC
 from sklearn.metrics import f1_score
 from sklearn.metrics import accuracy_score
 from sklearn.metrics import balanced_accuracy_score
+from sklearn.preprocessing import LabelEncoder
 import pickle
 import pandas as pd
 import numpy as np
 import os
+import torch
+from utils import *
+
 
 from preprocessing import *
 '''
@@ -31,69 +35,49 @@ def getName():
 # Output: PreProcessed Dataset dictionary
 def preprocess(dataset, clfName):
 
+    # Da dizionario in input a dataframe
+    data = pd.DataFrame.from_dict(dataset)
+
     # Drop duplicates
-    remove_duplicates(dataset)
+    df_undup = remove_duplicates(data)
 
-    X = dataset.drop(columns=["grade"])
-    y = dataset["grade"]
+    # Split
+    X = df_undup.drop(columns=["grade"])
+    y = df_undup["grade"]
 
-    # Drop columns 
-    drop_leakage_and_non_significant_cols(X)
-    drop_high_nan_cols(X)
-    drop_joint_and_secondary_cols(X)
-    drop_higly_correlated_numeric_features(X)
+    # Encoding Label 
+    le = LabelEncoder()
+    y = le.fit_transform(y)
 
-    # Feature extraction
-    feature_extraction(X)
-
-    # Rounding features
-    round_features_to_int(X)
-
-    # NaN management
-    nan_management_general_fill(X)
-    nan_management_imputation_fill(X)
-
-    # Outliers management
-    apply_capping(X)
-    apply_log_transform_on_skewed_cols(X)
-
-    #### TODO: ENCODING
-    #here encoding
 
     dataset_processed = {}
-    scaler = None
+    preprocessor = None
     
     if clfName == "rf":
-        scaler = pickle.load(open("rf_scaler.save", 'rb'))    
+        preprocessor = pickle.load(open("rf_preprocessor.save", 'rb'))    
     elif clfName == "svm":
-        scaler = pickle.load(open("svm_scaler.save", 'rb'))
+        preprocessor = pickle.load(open("svm_preprocessor.save", 'rb'))
     elif clfName == "knn":
-        scaler = pickle.load(open("knn_scaler.save", 'rb'))
+        preprocessor = pickle.load(open("knn_preprocessor.save", 'rb'))
     elif clfName == "ff":
-        scaler = pickle.load(open("ff_scaler.save", 'rb'))
+        preprocessor = pickle.load(open("ff_preprocessor.save", 'rb'))
     elif clfName == "tb":
-        scaler = pickle.load(open("tb_scaler.save", 'rb'))
+        preprocessor = pickle.load(open("tb_preprocessor.save", 'rb'))
     elif clfName == "tt":
-        scaler = pickle.load(open("tt_scaler.save", 'rb'))
-        
+        #preprocessor = pickle.load(open("tt_preprocessor.save", 'rb'))
+        print("Model not trained")
 
-    if scaler is not None:
-        dataset_processed = scaler.transform(X)
+    if preprocessor is not None:
+        dataset_processed['data'] = preprocessor.transform(X)
         dataset_processed['grade'] = y
-    else:
-        # ????? TODO CHECK
-        dataset_processed = X
-        dataset_processed["grade"] = y
+
+    return dataset_processed.to_dict()
 
 
-
-    
-    return dataset_processed
-
-
-# Input: Classifier name ("lr": Logistic Regression, "svc": Support Vector Classifier)
+# Input: Classifier name ("svc": Support Vector Classifier, ecc)
 # Output: Classifier object
 def load(clfName):
+    device = getDevice()
     clf = None
     
     if clfName == "rf":
@@ -103,11 +87,13 @@ def load(clfName):
     elif clfName == "knn":
         clf = pickle.load(open("knn.save", 'rb'))
     elif clfName == "ff":
-        clf = pickle.load(open("ff.save", 'rb'))
+        # TODO da FARE
+        clf = FeedForward_NN(input_size, num_classes, hidden_size, dropout_rate, depth=1).to(device)
+        checkpoint = torch.load('ff.pth', map_location=device)
+        clf.load_state_dict(checkpoint)
     elif clfName == "tb":
-        clf = pickle.load(open("tb.save", 'rb'))
-    elif clfName == "tt":
-        clf = pickle.load(open("tt.save", 'rb'))
+        #clf = pickle.load(open("tb.save", 'rb'))
+        # TODO da fare
 
     return clf
 
@@ -117,6 +103,10 @@ def load(clfName):
 def predict(dataset, clf):
     X = dataset['data']
     y = dataset['target']
+
+
+
+    # TODO PREDICT IN FF         clf.eval()
     
     ypred = clf.predict(X)
 

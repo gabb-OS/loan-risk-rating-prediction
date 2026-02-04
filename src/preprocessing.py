@@ -163,13 +163,13 @@ def remove_duplicates(df):
     feature_list = df.columns.to_list()
     has_duplicate_cols = len(feature_list) != len(set(feature_list))
     if has_duplicate_cols:
-        df.T.drop_duplicates(inplace=True).T
+        df_undup = df.T.drop_duplicates().T
 
     # Rimuovi righe duplicate
-    df.drop_duplicates(inplace=True)
+    df_undup = df_undup.drop_duplicates()
 
     print("\n Inizio rimozione duplicati.")
-    return
+    return df_undup
 
 
 def drop_leakage_and_non_significant_cols(X):

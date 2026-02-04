@@ -6,37 +6,35 @@ import os
 
 
 def plot_nan(df):
-    """ Plot nan bar graph ordered by nan % in each feature"""
+    """Plot stacked barh with % of NaN vs present values per feature"""
+
     df_plot = pd.DataFrame({
-        'Presenti': df.notna().sum(),
-        'Mancanti (NaN)': df.isna().sum()
+        'Presenti (%)': (df.notna().mean() * 100),
+        'Mancanti (NaN %)': (df.isna().mean() * 100)
     })
-    df_plot['pct_nan'] = (df_plot['Mancanti (NaN)'] / len(df)) * 100
 
-    # Ordiniamo per % di NaN crescente (così nel grafico barh i più alti appaiono in cima)
-    df_plot = df_plot.sort_values(by='pct_nan', ascending=True)
+    # Ordiniamo per % di NaN crescente
+    df_plot = df_plot.sort_values(by='Mancanti (NaN %)', ascending=True)
 
-    # 2. Creazione del grafico a barre orizzontali
-    ax = df_plot[['Presenti', 'Mancanti (NaN)']].plot(
+    ax = df_plot[['Presenti (%)', 'Mancanti (NaN %)']].plot(
         kind='barh',
         stacked=True,
         color=['#2ca02c', '#d62728'],
-        figsize=(10, 30) # Altezza aumentata per leggere tutte le 145 feature
+        figsize=(10, 30)
     )
 
-    # 3. Formattazione
-    plt.title('Distribuzione Valori Presenti vs NaN per Feature (Ordinato)', fontsize=16)
+    plt.title('Percentuale Valori Presenti vs NaN per Feature (Ordinato)', fontsize=16)
     plt.ylabel('Features', fontsize=14)
-    plt.xlabel('Numero di righe', fontsize=12)
+    plt.xlabel('Percentuale (%)', fontsize=12)
 
-    # Label delle feature rimpicciolite
     plt.yticks(fontsize=7)
+    plt.xlim(0, 100)
 
     plt.legend(loc='lower right', title='Stato')
     plt.grid(axis='x', linestyle='--', alpha=0.7)
 
     plt.tight_layout()
-    plt.savefig('missing_values_horizontal_sorted.png')
+    plt.savefig('missing_values_horizontal_sorted_pct.png')
     plt.show()
 
 

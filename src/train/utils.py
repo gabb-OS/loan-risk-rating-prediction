@@ -19,9 +19,11 @@ from sklearn.metrics import (
 )
 
 def drop_high_nan_columns(df, threshold):
-    min_valid_values = (1-threshold)*len(df)
+    # percentuale di NaN per colonna
+    nan_ratio = df.isna().mean() * 100
 
-    cols_to_drop = df.columns[df.notna().sum() < min_valid_values].tolist()
+    # colonne da rimuovere
+    cols_to_drop = nan_ratio[nan_ratio > threshold * 100].index.tolist()
 
     if cols_to_drop:
         print(f"Colonne rimosse (> {threshold*100}% NaN):")
@@ -29,7 +31,8 @@ def drop_high_nan_columns(df, threshold):
     else:
         print("Nessuna colonna rimossa.")
 
-    return df.dropna(thresh=min_valid_values, axis=1)
+    return df.drop(columns=cols_to_drop)
+
 
 
 def print_high_nan_columns(df, threshold):
@@ -147,10 +150,11 @@ def calculate_outlier_percentage(df):
 def evaluate_model(X_val_raw, y_val_true, prefix):
     """
     Carica dinamicamente i componenti disponibili e valuta il modello.
-    Se scaler o pca non esistono per il prefisso specificato, vengono saltati.
+    Supporta ora il caricamento del preprocessor (Pipeline di trasformazione).
     """
     
     # 1. Caricamento condizionale dei file
+    preprocessor = None
     scaler = None
     pca = None
     model = None
@@ -159,6 +163,11 @@ def evaluate_model(X_val_raw, y_val_true, prefix):
         # Il modello è l'unico file obbligatorio
         with open(f"{prefix}.save", "rb") as f:
             model = pickle.load(f)
+        
+        # Carica il preprocessor (Pipeline di drop/impute/encoding) se esiste
+        if os.path.exists(f"{prefix}_preprocessor.save"):
+            with open(f"{prefix}_preprocessor.save", "rb") as f:
+                preprocessor = pickle.load(f)
         
         # Carica scaler se esiste
         if os.path.exists(f"{prefix}_scaler.save"):
@@ -179,47 +188,47 @@ def evaluate_model(X_val_raw, y_val_true, prefix):
     print(f"========================================")
     
     # 2. Informazioni sulla Pipeline rilevata
-    print(f"Pre-processing: ", end="")
+    print(f"Workflow rilevato: ", end="")
     steps = []
+    if preprocessor: steps.append("Preprocessor (Custom Pipeline)")
     if scaler: steps.append(f"Scaler ({type(scaler).__name__})")
-    if pca: steps.append(f"Componenti PCA: {pca.n_components_} ({pca.explained_variance_ratio_.sum():.2%} varianza)")
-    print(" -> ".join(steps) if steps else "Nessuno (Dati Raw)")
+    if pca: steps.append(f"PCA ({pca.n_components_} comp.)")
+    print(" -> ".join(steps) if steps else "Dati Raw")
 
-    # 3. Parametri specifici del modello
-    if prefix == "knn":
-        print(f"Parametri: n_neighbors={model.n_neighbors}, metric='{model.metric}'")
-    elif prefix == "svc":
-        m_iter = getattr(model, 'max_iter', 'Default')
-        print(f"Parametri SVC: C={model.C}, kernel='{getattr(model, 'kernel', 'linear')}', max_iter={m_iter}")
-    elif prefix == "rf":
-        print(f"Parametri RF:")
-        print(f" - n_estimators: {model.n_estimators}")
-        print(f" - max_features: {model.max_features}")
-        print(f" - criterion:    {model.criterion}")
-        print(f" - max_depth:    {model.max_depth}")
-        print(f" - class_weight: {model.class_weight}")
+    # 3. Parametri specifici del modello (RF, KNN, SVC...)
+    if prefix == "rf":
+        print(f"Parametri RF: n_estimators={model.n_estimators}, max_depth={model.max_depth}, class_weight={model.class_weight}")
+    # ... (mantieni i tuoi blocchi elif per knn e svc qui) ...
     
     print(f"----------------------------------------\n")
 
-    # 4. Trasformazione condizionale dei dati
+    # 4. TRASFORMAZIONE SEQUENZIALE DEI DATI
     X_transformed = X_val_raw.copy()
     
+    # A. Applica il preprocessor (fondamentale per gestire colonne rimosse o nuove feature)
+    if preprocessor:
+        X_transformed = preprocessor.transform(X_transformed)
+    
+    # B. Applica scaler (se non già incluso nella pipeline di preprocessing)
     if scaler:
         X_transformed = scaler.transform(X_transformed)
     
+    # C. Applica PCA
     if pca:
         X_transformed = pca.transform(X_transformed)
         
+    # 5. Predizione
     y_pred = model.predict(X_transformed)
 
-    # 5. Metriche
+    # 6. Metriche
     print("CLASSIFICATION REPORT:")
+    # Se y_val_true è LabelEncoded e model.predict restituisce numeri, il report funzionerà bene
     print(classification_report(y_val_true, y_pred))
     
     print(f"Accuracy Score:          {accuracy_score(y_val_true, y_pred):.4f}")
     print(f"Balanced Accuracy Score: {balanced_accuracy_score(y_val_true, y_pred):.4f}")
 
-    # 6. Matrice di Confusione
+    # 7. Matrice di Confusione
     cm = confusion_matrix(y_val_true, y_pred)
     fig, ax = plt.subplots(figsize=(8, 6))
     
@@ -440,31 +449,39 @@ def auto_transform_features(df):
 
 
 
-def higly_correlated_numeric_features(df, threshold):
+def print_highly_correlated_numeric_features(df, threshold):
     numeric_df = df.select_dtypes(include=[np.number])
-    corr_matrix = numeric_df.corr()
-    columns = corr_matrix.columns
-    correlations_dict = {}
+    corr_matrix = numeric_df.corr().abs()
 
-    for i in range(len(columns)):
-        for j in range(i + 1, len(columns)):
-            col_a = columns[i]
-            col_b = columns[j]
-            val = corr_matrix.iloc[i, j]
-            
-            if abs(val) >= threshold:
-                if col_a not in correlations_dict:
-                    correlations_dict[col_a] = []
-                # Indica chiaramente il segno della correlazione
-                sign = "+" if val > 0 else "-"
-                correlations_dict[col_a].append(f"{col_b} ({sign}{abs(val):.2f})")
-    
+    # Triangolo superiore (esclude diagonale e duplicati)
+    upper_tri = corr_matrix.where(
+        np.triu(np.ones(corr_matrix.shape), k=1).astype(bool)
+    )
+
+    correlations_dict = {}
+    cols_to_drop = []
+
+    for column in upper_tri.columns:
+        high_corr = upper_tri[column][upper_tri[column] > threshold]
+
+        if not high_corr.empty:
+            cols_to_drop.append(column)
+            correlations_dict[column] = [
+                f"{idx} ({corr_matrix.loc[idx, column]:+.2f})"
+                for idx in high_corr.index
+            ]
+
+    # ---- PRINT ----
     if not correlations_dict:
         print(f"Nessuna correlazione trovata sopra la soglia di {threshold}")
     else:
         print(f"--- Colonne con correlazione assoluta >= {threshold} ---")
         for col, matches in correlations_dict.items():
             print(f"{col} correla con: {', '.join(matches)}")
+
+    return cols_to_drop
+
+
 
 
 

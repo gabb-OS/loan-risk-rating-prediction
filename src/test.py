@@ -109,6 +109,7 @@ def load(clfName):
     elif clfName == "tb":
         clf = TabNetClassifier()
         clf.load_model('tabnet_best_model.zip')
+    elif clfName == "tt":
         print("TabNet not implementata")
         clf = None
 

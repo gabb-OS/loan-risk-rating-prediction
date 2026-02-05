@@ -96,14 +96,19 @@ def load(clfName):
     elif clfName == "knn":
         clf = pickle.load(open("knn.save", 'rb'))
     elif clfName == "ff":
-        # TODO da FARE
-        clf = FeedForward_NN(input_size, num_classes, hidden_size, dropout_rate, depth=1).to(device)
+        metadata = pickle.load(open("ff_metadata.save", 'rb'))
+        input_size = metadata['input_size']
+        num_classes = metadata['num_classes']
+        hidden_size = metadata.get('hidden_size')
+        dropout_rate = metadata.get('dropout_rate')
+        depth = metadata.get('depth', 1)
+
+        clf = FeedForward_NN(input_size, num_classes, hidden_size, dropout_rate, depth).to(device)
         checkpoint = torch.load('ff.pth', map_location=device)
         clf.load_state_dict(checkpoint)
     elif clfName == "tb":
         clf = TabNetClassifier()
         clf.load_model('tabnet_best_model.zip')
-        # TODO: implementa TabNet
         print("TabNet not implementata")
         clf = None
 
@@ -116,11 +121,30 @@ def predict(dataset, clf):
     X = dataset['data']
     y = dataset['grade']
     
-
-    # TODO PREDICT IN FF         clf.eval()
+    if isinstance(clf, FeedForward_NN):
+        device = getDevice()
+        clf.eval()
+        
+        # Converti in tensore PyTorch
+        if isinstance(X, pd.DataFrame):
+            X_tensor = torch.FloatTensor(X.values).to(device)
+        else:
+            X_tensor = torch.FloatTensor(X).to(device)
+        
+        # Predizione senza calcolare gradienti
+        with torch.no_grad():
+            outputs = clf(X_tensor)
+            _, ypred = torch.max(outputs, 1)
+            ypred = ypred.cpu().numpy()
     
-    ypred = clf.predict(X)
+    elif isinstance(clf, TabNetClassifier):
+        ypred = clf.predict(X)
+    
+    else:
+        # Sklearn classificatori (KNN, RF, SVM)
+        ypred = clf.predict(X)
 
+    # Calcola le metriche
     acc = accuracy_score(y, ypred)
     bacc = balanced_accuracy_score(y, ypred)
     f1 = f1_score(y, ypred, average="weighted")
@@ -128,4 +152,3 @@ def predict(dataset, clf):
     perf = {"acc": acc, "bacc": bacc, "f1": f1}
     
     return perf
-    

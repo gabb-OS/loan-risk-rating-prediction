@@ -10,6 +10,7 @@ results/
 models/
 runs/
 *.save
+*.pth
 *.zip
 
 # Byte-compiled / optimized / DLL files

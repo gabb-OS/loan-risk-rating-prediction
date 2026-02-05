@@ -27,7 +27,7 @@ def run_simulation():
     
     # Elenco algoritmi da testare
     #algorithms = ["knn", "svm", "rf", "ff", "tb"]
-    algorithms = ["tb"]
+    algorithms = ["ff"]
     
     all_results = {}
 

@@ -1,8 +1,4 @@
 MY_UNIQUE_ID = "AprileTassi"
-
-from sklearn.preprocessing import MinMaxScaler
-from sklearn.linear_model import LogisticRegression
-from sklearn.svm import SVC
 from sklearn.metrics import f1_score
 from sklearn.metrics import accuracy_score
 from sklearn.metrics import balanced_accuracy_score
@@ -11,15 +7,13 @@ from pytorch_tabnet.tab_model import TabNetClassifier
 import pickle
 import pandas as pd
 import numpy as np
-import os
 import torch
-import sys
 from support_modules.utils import *
 from support_modules.preprocessing import *
-# ========== CONFIGURA SKLEARN PER OUTPUT PANDAS ==========
+
+# ========== SKLEARN PER OUTPUT PANDAS ==========
 from sklearn import set_config
-set_config(transform_output="pandas")  # ← AGGIUNGI QUESTA RIGA
-# =========================================================
+set_config(transform_output="pandas")
 
 '''
 Il campo clfName è una stringa con i seguenti valori ammissibili:

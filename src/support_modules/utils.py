@@ -590,3 +590,5 @@ class FeedForward_NN(nn.Module):
         h = self.model(x)
         out = self.output(h)
         return out
+    
+

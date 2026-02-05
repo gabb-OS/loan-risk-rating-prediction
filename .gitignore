@@ -6,6 +6,12 @@ results/
 *.png
 *.jpg
 
+# pesi e pipeline results
+models/
+runs/
+*.save
+*.zip
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]

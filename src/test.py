@@ -7,15 +7,20 @@ from sklearn.metrics import f1_score
 from sklearn.metrics import accuracy_score
 from sklearn.metrics import balanced_accuracy_score
 from sklearn.preprocessing import LabelEncoder
+from pytorch_tabnet.tab_model import TabNetClassifier
 import pickle
 import pandas as pd
 import numpy as np
 import os
 import torch
-from utils import *
+import sys
+from support_modules.utils import *
+from support_modules.preprocessing import *
+# ========== CONFIGURA SKLEARN PER OUTPUT PANDAS ==========
+from sklearn import set_config
+set_config(transform_output="pandas")  # ← AGGIUNGI QUESTA RIGA
+# =========================================================
 
-
-from preprocessing import *
 '''
 Il campo clfName è una stringa con i seguenti valori ammissibili:
 - 'knn' → identifica classificatore K-Nearest Neighbour
@@ -54,7 +59,7 @@ def preprocess(dataset, clfName):
     preprocessor = None
     
     if clfName == "rf":
-        preprocessor = pickle.load(open("rf_preprocessor.save", 'rb'))    
+        preprocessor = pickle.load(open("rf_preprocessor.save", 'rb')) 
     elif clfName == "svm":
         preprocessor = pickle.load(open("svm_preprocessor.save", 'rb'))
     elif clfName == "knn":
@@ -68,10 +73,19 @@ def preprocess(dataset, clfName):
         print("Model not trained")
 
     if preprocessor is not None:
-        dataset_processed['data'] = preprocessor.transform(X)
+        try:
+            X_transformed = preprocessor.transform(X)
+            dataset_processed['data'] = X_transformed
+            dataset_processed['grade'] = y
+        except Exception as e:
+            print(f"ERRORE durante transform: {e}")
+            print(f"Tipo di X passato al preprocessor: {type(X)}")
+            raise
+    else:
+        dataset_processed['data'] = X.values
         dataset_processed['grade'] = y
 
-    return dataset_processed.to_dict()
+    return dataset_processed
 
 
 # Input: Classifier name ("svc": Support Vector Classifier, ecc)
@@ -92,8 +106,11 @@ def load(clfName):
         checkpoint = torch.load('ff.pth', map_location=device)
         clf.load_state_dict(checkpoint)
     elif clfName == "tb":
-        #clf = pickle.load(open("tb.save", 'rb'))
-        # TODO da fare
+        clf = TabNetClassifier()
+        clf.load_model('tabnet_best_model.zip')
+        # TODO: implementa TabNet
+        print("TabNet not implementata")
+        clf = None
 
     return clf
 
@@ -102,9 +119,8 @@ def load(clfName):
 # Output: Performance dictionary
 def predict(dataset, clf):
     X = dataset['data']
-    y = dataset['target']
-
-
+    y = dataset['grade']
+    
 
     # TODO PREDICT IN FF         clf.eval()
     

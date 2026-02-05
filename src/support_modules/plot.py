@@ -171,7 +171,7 @@ def plot_outliers_scatter(df):
         plt.tight_layout()
         plt.show()
 
-def plot_top_correlations_split(X, y, n=50):
+def plot_top_correlations_split(X, y, n=30):
     """
     Calcola e visualizza la correlazione tra X_train e y_train.
 
@@ -195,7 +195,7 @@ def plot_top_correlations_split(X, y, n=50):
     top_features = correlations.loc[top_n_idx].sort_values(ascending=True)
 
     # 5. Plotting
-    plt.figure(figsize=(10, 12))
+    plt.figure(figsize=(8, 10))
 
     # Colore rosso per corr. positiva, blu per negativa
     colors = ['#d62728' if x > 0 else '#1f77b4' for x in top_features]
@@ -419,3 +419,67 @@ def plot_feature_importance(model_input, feature_names, top_n=20, title="Top Fea
     plt.show()
 
     return fi_df
+
+
+def plot_leakage_evidence(x_series, y_series, title=None, xlabel=None, ylabel=None, save_path=None):
+    """
+    Genera un grafico combinato (Boxplot + Strip Plot) per visualizzare 
+    la correlazione/leakage tra una feature categorica e una numerica.
+    
+    Args:
+        x_series (pd.Series): La feature categorica (es. X['grade'] o target y)
+        y_series (pd.Series): La feature numerica (es. X['loan_interest_rate'])
+        title (str): Titolo del grafico.
+        xlabel (str): Etichetta asse X. Se None, usa il nome della serie.
+        ylabel (str): Etichetta asse Y. Se None, usa il nome della serie.
+        save_path (str): Se specificato, salva il grafico in questo percorso (es. 'plot.png').
+    """
+    
+    # Creiamo un DataFrame temporaneo per facilitare l'uso di Seaborn
+    # Assicuriamo che gli indici siano allineati
+    df_temp = pd.DataFrame({
+        'x': x_series.values,
+        'y': y_series.values
+    })
+    
+    # Impostiamo lo stile
+    sns.set_theme(style="ticks", rc={"axes.grid": True, "grid.linestyle": ":"})
+    
+    plt.figure(figsize=(12, 7))
+    
+    # Ordiniamo le categorie (assumendo siano stringhe o numeri ordinabili)
+    order = sorted(df_temp['x'].unique())
+    my_palette = sns.color_palette("viridis", len(order))
+    
+    # 1. STRIP PLOT (Sfondo, punti grigi)
+    sns.stripplot(
+        data=df_temp, x='x', y='y', order=order,
+        color='grey', size=2.5, alpha=0.50, jitter=0.3, zorder=0
+    )
+    
+    # 2. BOXPLOT (Primo piano, colorato)
+    sns.boxplot(
+        data=df_temp, x='x', y='y', order=order,
+        palette=my_palette, showfliers=False, width=0.5, linewidth=2,
+        boxprops=dict(alpha=0.9), zorder=10
+    )
+    
+    # Etichette e Titoli
+    final_title = title if title else f"Distribuzione: {x_series.name} vs {y_series.name}"
+    final_xlabel = xlabel if xlabel else x_series.name
+    final_ylabel = ylabel if ylabel else y_series.name
+    
+    plt.title(final_title, fontsize=15, fontweight='bold', pad=20)
+    plt.xlabel(final_xlabel, fontsize=12, fontweight='bold')
+    plt.ylabel(final_ylabel, fontsize=12, fontweight='bold')
+    
+    # Pulizia bordi
+    sns.despine(trim=True)
+    
+    plt.tight_layout()
+    
+    if save_path:
+        plt.savefig(save_path, dpi=300)
+        print(f"Grafico salvato in: {save_path}")
+        
+    plt.show()

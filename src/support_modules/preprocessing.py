@@ -149,10 +149,59 @@ class RoundToIntTransformer(BaseEstimator, TransformerMixin):
         for col in [c for c in self.columns if c in X.columns]:
                 X[col] =  np.round(X[col]).astype('Int64')
         return X
+    
+
+# ============================================================================== 
+#  K-Nearest Neighbors (KNN) - SVC
+# ==============================================================================
+class Winsorizer(BaseEstimator, TransformerMixin):
+    def __init__(self, lower_quantile=0.01, upper_quantile=0.99):
+        self.lower_quantile = lower_quantile
+        self.upper_quantile = upper_quantile
+        self.limits_ = {}
+
+    def fit(self, X, y=None):
+        numeric_cols = X.select_dtypes(include=[np.number]).columns
+        
+        for col in numeric_cols:
+            self.limits_[col] = (
+                X[col].quantile(self.lower_quantile),
+                X[col].quantile(self.upper_quantile)
+            )
+        return self
+
+    def transform(self, X):
+        X = X.copy()
+        for col, (lower, upper) in self.limits_.items():
+            if col in X.columns:
+                X[col] = X[col].clip(lower=lower, upper=upper)
+        return X
+
+class SkewnessTransformer(BaseEstimator, TransformerMixin):
+    def __init__(self, threshold=0.75):
+        self.threshold = threshold
+        self.skewed_cols_ = []
+
+    def fit(self, X, y=None):
+        numeric_cols = X.select_dtypes(include=[np.number]).columns
+        
+        skew_values = X[numeric_cols].skew().abs()
+        
+        self.skewed_cols_ = skew_values[skew_values > self.threshold].index.tolist()
+        return self
+
+    def transform(self, X):
+        X = X.copy()
+        for col in self.skewed_cols_:
+            if col in X.columns:
+                if (X[col] >= 0).all():
+                    X[col] = np.log1p(X[col]) 
+        return X
 
 
-## TabNet ##################################################################################################
-
+# ============================================================================== 
+# TabNet
+# ==============================================================================
 class CategoricalImputer(BaseEstimator, TransformerMixin):
     def __init__(self):
         self.categorical_cols_ = None
@@ -315,7 +364,9 @@ class CompletePipelineTabNet:
 
 
 
-## Functions ##################################################################################################
+# ============================================================================== 
+# Support Functions
+# ==============================================================================
 def remove_duplicates(df):
     print("\n Inizio rimozione duplicati...")
 
@@ -335,229 +386,3 @@ def remove_duplicates(df):
 
     print("\n Fine rimozione duplicati.")
     return df_undup
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-def drop_leakage_and_non_significant_cols(X):
-    print("\n Inizio rimozione colonne leakage...")
-    # "Settlement" indica una situazione avvenuta durante / dopo il prestito, non al momento della concessione
-    settlement_data_leakage = [col for col in X.columns if 'settlement' in col]
-
-    # "Hardship loans" sono concessioni per agevolare il pagamento di un prestito quando il debitore si trova in momenti di difficoltà economica (perdita lavoro, problemi medici, disastri naturali)
-    # https://www.oaic.gov.au/privacy/your-privacy-rights/credit-reporting/hardship-assistance/what-is-a-financial-hardship-arrangement
-    # https://financialrights.org.au/factsheet/financial-hardship/
-    hardship_data_leakage = [col for col in X.columns if 'hardship' in col]
-
-        # DROP OPERATIONS
-    X.drop(columns=loan_performance_data_leakage, inplace=True)
-    print("Nuovo # Colonne: " +  str(X.shape[1]) + "\n")
-
-    X.drop(columns=settlement_data_leakage, inplace=True)
-    print("Nuovo # Colonne: " +  str(X.shape[1]) + "\n")
-
-    X.drop(columns=hardship_data_leakage, inplace=True)
-    print("Nuovo # Colonne: " +  str(X.shape[1]) + "\n")
-
-    X.drop(columns=other_leakage, inplace=True)
-    print("Nuovo # Colonne: " +  str(X.shape[1]) + "\n")
-
-    X.drop(columns=loan_contract_interest_rate, inplace=True)
-    print("Nuovo # Colonne: " +  str(X.shape[1]) + "\n")
-
-    X.drop(columns=other_non_significant, inplace=True)
-    print("Nuovo # Colonne: " +  str(X.shape[1]) + "\n")
-
-    print("\n Fine rimozione colonne leakage.")
-    return
-
-
-def drop_high_nan_cols(X):
-    print("\n Inizio rimozione colonne con alto numero NaN...")
-
-    X.drop(columns=high_nan_columns, inplace=True)
-    print("Nuovo # Colonne: " +  str(X.shape[1]) + "\n")
-
-    print("\n Fine rimozione colonne con alto numero NaN.")
-    return
-
-
-def drop_joint_and_secondary_cols(X):
-    print("\n Inizio rimozione colonne joint_ e secondary_...")
-
-    joint_and_secondary_cols = [col for col in X.columns if col.startswith('joint_') or col.startswith('secondary_')]
-
-    X.drop(columns=joint_and_secondary_cols, inplace=True)
-    print("Nuovo # Colonne: " +  str(X.shape[1]) + "\n")
-
-    print("\n Fine rimozione colonne joint_ e secondary_")
-    return
-
-
-def drop_higly_correlated_numeric_features(X):
-    print("\n Inizio rimozione colonne altamente correlate tra loro...")
-
-    X.drop(columns=redundant_features, inplace=True)
-    print("\nNuovo # Colonne: " +  str(X.shape[1]) + "\n")
-
-    print("\n Fine rimozione colonne altamente correlate tra loro")
-    return
-
-
-def feature_extraction(X):
-    print("\n Inizio feature extraction...")
-
-    # Trasforma "36 months" e "60 months" in float type
-    X['loan_contract_term_months'] = X['loan_contract_term_months'].str.extract(r'(\d+)').astype(float)
-
-    # Strip della stringa "years"
-    # Trasforma anni in float: < 1 diventa 0, 10+ diventa 10
-    X['borrower_profile_employment_length'] = X['borrower_profile_employment_length'].str.replace(r'\+? years?', '', regex=True)
-    X['borrower_profile_employment_length'] = X['borrower_profile_employment_length'].replace({ '< 1': 0}).astype(float)
-
-    # FICO average da fico_score_low_bound e fico_score_high_bound
-    X['fico_average'] = (X['fico_score_low_bound'] + X['fico_score_high_bound']) / 2
-    X.drop(columns=['fico_score_low_bound', 'fico_score_high_bound'], inplace=True)
-    print("\nNuovo # Colonne: " +  str(X.shape[1]) + "\n")
-
-    # Loan issue date usato per calcolare una feature derivata: 
-    # months_since_earliest_cr_line (Numero mesi passati tra prima richiesta credito e loan date )
-    X['loan_issue_date'] = pd.to_datetime(X['loan_issue_date'], format='%b-%Y')
-    X['credit_history_earliest_line'] = pd.to_datetime(X['credit_history_earliest_line'], format='%b-%Y')
-
-    X['months_since_earliest_cr_line'] = (
-        (X['loan_issue_date'].dt.year - X['credit_history_earliest_line'].dt.year) * 12 +
-        (X['loan_issue_date'].dt.month - X['credit_history_earliest_line'].dt.month)
-    )
-
-    # Tutte le features rimanenti con date non sono rilevanti
-    date_cols = [col for col in X.columns if 'date' in col]
-    to_drop = [
-        'credit_history_earliest_line',     # used for feature extraction
-        ] + date_cols
-    X.drop(columns=to_drop, inplace=True)
-    print("Nuovo # Colonne: " +  str(X.shape[1]) + "\n")
-
-    print("\n Fine feature extraction")
-    return
-
-
-def round_features_to_int(X):
-    print("\n Inizio arrotondamento delle features di tipo Int...")
-
-    for col in round_to_nearest_int:
-        if col in X.columns:
-            X[col] = np.round(X[col]).astype('Int64')
-        else:
-            print(f"Warning: '{col}' non trovata nel DataFrame")
-    
-
-    print("\n Fine arrotondamento delle features di tipo Int")
-    return
-
-
-def nan_management_general_fill(X):
-    print("\n Inizio gestione NaN generici...")
-
-    # Feature categoriche in cui i valori NaN sono riempiti con una nuova label Unknown
-    X[categorical_to_unknown_cols] = X[categorical_to_unknown_cols].fillna('unknown')
-
-    #"Months Since" columns (NaN = mai accaduto)
-    # filliamo con grande numero (e.g., 100 months) per dire "molto tempo fa / mai"
-    X[fill_big_cols] = X[fill_big_cols].fillna(100)
-
-    # 2. FILL con 0 (se non e' presente, allora equivale a mai/nessuno -> 0)
-    X[fill_zero_cols] = X[fill_zero_cols].fillna(0)
-
-    print("\n Fine gestione NaN generici")
-    return
-
-
-def nan_management_imputation_fill(X):
-    print("\n Inizio gestione NaN con imputation...")
-
-    # Feature categoriche in cui i valori NaN possono essere riempiti con la moda:
-    # valori con 2 etichette, in cui la mancanza di un dato viene trattato come "no" o come occorrenza piu' frequente
-    cat_imputer = SimpleImputer(strategy='most_frequent')
-    cat_imputer.fit(X[fill_to_mode_cat])
-    X[fill_to_mode_cat] = cat_imputer.transform(X[fill_to_mode_cat])
-
-    num_imputer = SimpleImputer(strategy='most_frequent')
-    num_imputer.fit(X[fill_to_mode_num])
-    X[fill_to_mode_num] = num_imputer.transform(X[fill_to_mode_num])
-
-
-    # Feature da fillare con mediana
-    imputer = SimpleImputer(strategy='median')
-    imputer.fit(X[numerical_to_median])
-    X[numerical_to_median] = imputer.transform(X[numerical_to_median])
-
-    print("\n Fine gestione NaN con imputation")
-    return
-
-
-def apply_capping(X):
-    print("\n Inzio capping feature numeriche...")    
-    lower_quantile = 0.01
-    upper_quantile = 0.99
-    # Selezioniamo solo le colonne numeriche
-    numerical_cols = X.select_dtypes(include=['float', 'int']).columns
-
-    for col in numerical_cols:
-        lower_limit = X[col].quantile(lower_quantile)
-        upper_limit = X[col].quantile(upper_quantile)
-
-        # Applicazione del capping (clipping)
-        X[col] = X[col].clip(lower=lower_limit, upper=upper_limit)
-
-        print("\n Fine capping feature numeriche")
-
-    return
-
-
-
-def apply_log_transform_on_skewed_cols(X):
-    print("\n Inzio log transformation...")   
-    ###TODO
-    
-    for col in skewed_cols:
-        # Verifica che non ci siano valori negativi prima di applicare il log
-        if (X[col] >= 0).all():
-            X[col] = np.log1p(X[col])
-        else:
-            print(f"Salto {col}: contiene valori negativi (impossibile applicare log).")
-    
-    print("\n Fine log transformation")
-
-    return
-

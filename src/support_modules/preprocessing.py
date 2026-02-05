@@ -296,9 +296,8 @@ class ToFloat32(BaseEstimator, TransformerMixin):
 
 class CompletePipelineTabNet:
     
-    def __init__(self, structure_pipeline, test_size=0.25, random_state=42):
+    def __init__(self, structure_pipeline, random_state=42):
         self.structure_pipeline = structure_pipeline
-        self.test_size = test_size
         self.random_state = random_state
         
         # Initialize preprocessing steps

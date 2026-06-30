@@ -56,11 +56,11 @@ other_leakage = [
     'original_projected_additional_accrued_interest',           # interesse addizionale previsto, presumibilmente in seguito a modifiche di piani ammortamento o hardship
     #'loan_issue_date',                                         # Il grade è influenzato dalla situazione creditizia del richiedente, più che dal periodo
                                                                 # droppato in un secondo momento, dopo averlo usato per feature extraction
-    'investor_side_funded_amount',
-    'loan_portfolio_total_funded',
 ]
 
 other_non_significant = [
+    'investor_side_funded_amount',
+    'loan_portfolio_total_funded',
     'platform_policy_code_id',                                      # id interno al prestatore
     'loan_title',                                                   # non significant column, grande sparsita' di dati. Sufficiente loan_purpose_category come aggregazione di scopo del prestito
     'borrower_address_zip',                                         # non significant column, esiste una colonna per identificazione stati

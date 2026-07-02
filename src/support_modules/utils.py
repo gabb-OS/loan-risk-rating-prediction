@@ -145,104 +145,88 @@ def calculate_outlier_percentage(df):
     return results_df
 
 
-def evaluate_model(X_val_raw, y_val_true, prefix):
+def evaluate_model(X_val_raw, y_val_true, clfName, model_dir="models", preproc_dir="preprocessing"):
     """
-    Carica dinamicamente i componenti disponibili e valuta il modello.
-    Supporta ora il caricamento del preprocessor (Pipeline di trasformazione).
-    """
-    
-    # 1. Caricamento condizionale dei file
-    preprocessor = None
-    scaler = None
-    pca = None
-    model = None
+    Valuta il modello applicando ESATTAMENTE la stessa pipeline di preprocessing
+    usata in training (stessa logica di preprocess()).
 
-    try:
-        # Il modello è l'unico file obbligatorio
-        with open(f"{prefix}.save", "rb") as f:
-            model = pickle.load(f)
-        
-        # Carica il preprocessor (Pipeline di drop/impute/encoding) se esiste
-        if os.path.exists(f"{prefix}_preprocessor.save"):
-            with open(f"{prefix}_preprocessor.save", "rb") as f:
-                preprocessor = pickle.load(f)
-        
-        # Carica scaler se esiste
-        if os.path.exists(f"{prefix}_scaler.save"):
-            with open(f"{prefix}_scaler.save", "rb") as f:
-                scaler = pickle.load(f)
-        
-        # Carica pca se esiste
-        if os.path.exists(f"{prefix}_pca.save"):
-            with open(f"{prefix}_pca.save", "rb") as f:
-                pca = pickle.load(f)
-                
-    except Exception as e:
-        print(f"Errore durante il caricamento dei file per '{prefix}': {e}")
+    Parametri
+    ---------
+    X_val_raw : DataFrame delle feature di validazione (grezze, non trasformate)
+    y_val_true : target di validazione (già label-encoded, coerente col training)
+    clfName : 'rf', 'svm', 'knn', 'ff', 'tb', 'tt'
+    model_dir : cartella dei file .save del modello
+    preproc_dir : cartella dei file _preprocessor.save
+    """
+
+    # 1. Caricamento del preprocessor
+    preprocessor = None
+    preproc_path = os.path.join(preproc_dir, f"{clfName}_preprocessor.save")
+
+    if clfName in ("rf", "svm", "knn", "ff", "tb"):
+        if os.path.exists(preproc_path):
+            preprocessor = pickle.load(open(preproc_path, 'rb'))
+        else:
+            print(f"Attenzione: preprocessor non trovato per '{clfName}' in '{preproc_path}'")
+    elif clfName == "tt":
+        print("Model not trained")
+        return
+    else:
+        print(f"clfName '{clfName}' non riconosciuto")
         return
 
-    print(f"========================================")
-    print(f"REPORT VALUTAZIONE: {prefix.upper()}")
-    print(f"========================================")
-    
-    # 2. Informazioni sulla Pipeline rilevata
-    print(f"Workflow rilevato: ", end="")
-    steps = []
-    if preprocessor: steps.append("Preprocessor (Custom Pipeline)")
-    if scaler: steps.append(f"Scaler ({type(scaler).__name__})")
-    if pca: steps.append(f"PCA ({pca.n_components_} comp.)")
-    print(" -> ".join(steps) if steps else "Dati Raw")
+    # 2. Caricamento modello
+    model_path = os.path.join(model_dir, f"{clfName}.save")
+    if not os.path.exists(model_path):
+        print(f"Errore: modello non trovato in '{model_path}'")
+        return
+    model = pickle.load(open(model_path, 'rb'))
 
-    # 3. Parametri specifici del modello (RF, KNN, SVC...)
-    if prefix == "rf":
-        print(f"Parametri RF: n_estimators={model.n_estimators}, max_depth={model.max_depth}, criterion={model.criterion}. class_weight={model.class_weight}")
-    elif prefix == "svc":
-        m_iter = getattr(model, 'max_iter', 'Default')
-        print(f"Parametri SVC: C={model.C}, kernel='{getattr(model, 'kernel', 'linear')}', max_iter={m_iter}")
-    elif prefix == "rf":
+    print(f"========================================")
+    print(f"REPORT VALUTAZIONE: {clfName.upper()}")
+    print(f"========================================")
+    print(f"Workflow rilevato: {'Preprocessor (Custom Pipeline)' if preprocessor is not None else 'Dati Raw'}")
+
+    if clfName == "rf":
         print(f"Parametri RF:")
         print(f" - n_estimators: {model.n_estimators}")
         print(f" - max_features: {model.max_features}")
         print(f" - criterion:    {model.criterion}")
         print(f" - max_depth:    {model.max_depth}")
         print(f" - class_weight: {model.class_weight}")
-    
+    elif clfName == "svm":
+        m_iter = getattr(model, 'max_iter', 'Default')
+        print(f"Parametri SVC: C={model.C}, kernel='{getattr(model, 'kernel', 'linear')}', max_iter={m_iter}")
+
     print(f"----------------------------------------\n")
 
-    # 4. TRASFORMAZIONE SEQUENZIALE DEI DATI
-    X_transformed = X_val_raw.copy()
-    
-    # A. Applica il preprocessor (fondamentale per gestire colonne rimosse o nuove feature)
-    if preprocessor:
-        X_transformed = preprocessor.transform(X_transformed)
-    
-    # B. Applica scaler (se non già incluso nella pipeline di preprocessing)
-    if scaler:
-        X_transformed = scaler.transform(X_transformed)
-    
-    # C. Applica PCA
-    if pca:
-        X_transformed = pca.transform(X_transformed)
-        
-    # 5. Predizione
+    # 3. Trasformazione
+    if preprocessor is not None:
+        try:
+            X_transformed = preprocessor.transform(X_val_raw)
+        except Exception as e:
+            print(f"ERRORE durante transform: {e}")
+            print(f"Tipo di X passato al preprocessor: {type(X_val_raw)}")
+            raise
+    else:
+        X_transformed = X_val_raw.values if hasattr(X_val_raw, "values") else X_val_raw
+
+    # 4. Predizione
     y_pred = model.predict(X_transformed)
 
-    # 6. Metriche
+    # 5. Metriche
     print("CLASSIFICATION REPORT:")
-    # Se y_val_true è LabelEncoded e model.predict restituisce numeri, il report funzionerà bene
     print(classification_report(y_val_true, y_pred))
-    
     print(f"Accuracy Score:          {accuracy_score(y_val_true, y_pred):.4f}")
     print(f"Balanced Accuracy Score: {balanced_accuracy_score(y_val_true, y_pred):.4f}")
 
-    # 7. Matrice di Confusione
+    # 6. Matrice di confusione
     cm = confusion_matrix(y_val_true, y_pred)
     fig, ax = plt.subplots(figsize=(8, 6))
-    
-    colors = {'knn': 'Greens', 'svc': 'Blues', 'rf': 'Oranges'}
+    colors = {'knn': 'Greens', 'svm': 'Blues', 'rf': 'Oranges'}
     disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=model.classes_)
-    disp.plot(cmap=colors.get(prefix, 'Purples'), ax=ax, values_format='d')
-    plt.title(f'Confusion Matrix - {prefix.upper()}')
+    disp.plot(cmap=colors.get(clfName, 'Purples'), ax=ax, values_format='d')
+    plt.title(f'Confusion Matrix - {clfName.upper()}')
     plt.show()
 
 

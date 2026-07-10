@@ -207,7 +207,7 @@ def plot_top_correlations_split(X, y, n=30):
         ax.text(v + (0.01 if v > 0 else -0.06), i, f'{v:.2f}',
                 va='center', fontsize=10, fontweight='bold')
 
-    plt.title(f'Top {n} Feature correlate con il Grade (X_train vs y_train)', fontsize=15, fontweight='bold')
+    plt.title(f'Top {n} features correlate con il grade', fontsize=15, fontweight='bold')
     plt.xlabel('Coefficiente di Correlazione (Pearson)', fontsize=12)
     plt.ylabel('Features', fontsize=12)
     plt.grid(axis='x', linestyle='--', alpha=0.4)

@@ -12,6 +12,8 @@ def getDevice():
         print("No GPU acceleration available.")
         device = torch.device("cpu")
 
+    return device
+
 
 class FeedForward_NN(nn.Module):
     def __init__(self, input_size, num_classes, hidden_size, dropout_rate, depth=1):

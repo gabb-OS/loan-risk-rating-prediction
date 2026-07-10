@@ -45,9 +45,11 @@ def preprocess(dataset, clfName):
     X = df_undup.drop(columns=["grade"])
     y = df_undup["grade"]
 
-    # Encoding Label 
+    # Encoding Label
     le = LabelEncoder()
-    y = le.fit_transform(y)
+    # hardcoding label values to use the same used in train
+    le.classes_ = np.array(["A", "B", "C", "D", "E", "F", "G"])
+    y = le.transform(y)
 
 
     dataset_processed = {}
@@ -63,8 +65,8 @@ def preprocess(dataset, clfName):
         preprocessor = pickle.load(open("ff_preprocessor.save", 'rb'))
     elif clfName == "tb":
         preprocessor = pickle.load(open("tb_preprocessor.save", 'rb'))
-    elif clfName == "tt":
-        #preprocessor = pickle.load(open("tt_preprocessor.save", 'rb'))
+    elif clfName == "tf":
+        #preprocessor = pickle.load(open("tf_preprocessor.save", 'rb'))
         print("Model not trained")
 
     if preprocessor is not None:
@@ -83,7 +85,7 @@ def preprocess(dataset, clfName):
     return dataset_processed
 
 
-# Input: Classifier name ("svc": Support Vector Classifier, ecc)
+# Input: Classifier name ("svm": Support Vector Classifier, ecc)
 # Output: Classifier object
 def load(clfName):
     device = getDevice()
@@ -109,14 +111,14 @@ def load(clfName):
     elif clfName == "tb":
         clf = TabNetClassifier()
         clf.load_model('tabnet_best_model.zip')
-    elif clfName == "tt":
-        print("TabNet not implementata")
+    elif clfName == "tf":
+        print("TabTransformer non implementata")
         clf = None
 
     return clf
 
 
-# Input: PreProcessed Dataset dictionary, Classifier Name, Classifier Object 
+# Input: PreProcessed Dataset dictionary, Classifier Object 
 # Output: Performance dictionary
 def predict(dataset, clf):
     X = dataset['data']

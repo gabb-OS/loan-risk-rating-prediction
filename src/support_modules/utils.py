@@ -46,61 +46,91 @@ def print_high_nan_columns(df, threshold):
     return
 
 
-def print_nan(df, types=None):
+def print_nan(df, types=None, sort_by='nan', ascending=False, show_values=True):
     """
-    Esplora i NaN e i valori univoci (mostrando i valori effettivi) per ogni feature.
+    Esplora i NaN (e opzionalmente i valori univoci) per ogni feature.
     Mostra solo le colonne che contengono almeno un valore NaN.
+
+    Parametri
+    ---------
+    types : list o None
+        Tipi da includere (es. ['number', 'object']). None = tutte le colonne.
+    sort_by : str
+        Caratteristica su cui ordinare: 'feature', 'type', 'nan', 'perc', 'uniques'.
+    ascending : bool
+        Ordine crescente (True) o decrescente (False).
+    show_values : bool
+        Se True mostra la colonna con i valori univoci, altrimenti la nasconde.
     """
-    # Selezione colonne per tipo
-    if types:
-        selected_cols = df.select_dtypes(include=types).columns
-    else:
-        selected_cols = df.columns
+    sort_map = {
+        'feature':  'Feature',
+        'type':     '_type_str',
+        'nan':      'Nan',
+        'perc':     '_nan_perc',
+        'uniques':  'Uniques Count',
+    }
+    if sort_by not in sort_map:
+        raise ValueError(f"sort_by deve essere uno tra: {list(sort_map)}")
 
-    working_df = df[selected_cols]
+    selected_cols = df.select_dtypes(include=types).columns if types else df.columns
+    n_total_cols = len(selected_cols)
 
-    # Liste per raccogliere i dati
     data = []
-
     for col in selected_cols:
-        # Calcolo metriche per la colonna
-        nan_count = working_df[col].isna().sum()
-        
-        # Salta le colonne senza NaN
+        nan_count = df[col].isna().sum()
         if nan_count == 0:
             continue
-            
-        nan_perc = (nan_count / len(df)) * 100
-        dtype = working_df[col].dtype
 
-        # Otteniamo i valori unici (escludendo i NaN per chiarezza)
-        uniques = working_df[col].dropna().unique()
+        nan_perc = nan_count / len(df) * 100
+        uniques = df[col].dropna().unique()
         n_uniques = len(uniques)
 
-        # Formattazione della stringa dei valori unici
+        try:
+            uniques = sorted(uniques)
+        except TypeError:
+            uniques = list(uniques)
+
         if n_uniques <= 10:
-            uniques_str = str(list(uniques))
+            uniques_str = ", ".join(map(str, uniques))
         else:
-            # Se sono troppi, mostriamo un'anteprima
-            uniques_str = f"{list(uniques[:5])}... (+{n_uniques-5} more)"
+            preview = ", ".join(map(str, uniques[:5]))
+            uniques_str = f"{preview}, … (+{n_uniques - 5})"
 
         data.append({
             'Feature': col,
-            'Type': dtype,
+            'Type': str(df[col].dtype),
             'Nan': nan_count,
             'Percentuale NaN (%)': f"{nan_perc:.2f}%",
             'Uniques Count': n_uniques,
-            'Unique Values': uniques_str
+            'Unique Values': uniques_str,
+            '_type_str': str(df[col].dtype),
+            '_nan_perc': nan_perc,
         })
 
-    # Creazione e ordinamento della tabella
-    if data:  # Verifica che ci siano dati da mostrare
-        nan_table = pd.DataFrame(data).sort_values(by='Uniques Count')
-        # Stampa con formattazione migliorata
-        print(nan_table.to_string(index=False))
-    else:
+    # --- Riga di riepilogo in cima ---
+    n_cols_with_nan = len(data)
+    cols_perc = n_cols_with_nan / n_total_cols * 100 if n_total_cols else 0
+    print(f"Colonne con almeno un NaN: {n_cols_with_nan}/{n_total_cols} "
+          f"({cols_perc:.2f}%)")
+    print("-" * 60)
+
+    if not data:
         print("Nessuna colonna contiene valori NaN.")
-    
+        return
+
+    nan_table = pd.DataFrame(data).sort_values(by=sort_map[sort_by],
+                                               ascending=ascending)
+
+    cols_to_show = ['Feature', 'Type', 'Nan', 'Percentuale NaN (%)', 'Uniques Count']
+    if show_values:
+        cols_to_show.append('Unique Values')
+
+    nan_table = nan_table[cols_to_show]
+
+    with pd.option_context('display.max_colwidth', 60,
+                           'display.colheader_justify', 'left'):
+        print(nan_table.to_string(index=False))
+
     return
 
 
@@ -163,7 +193,7 @@ def evaluate_model(X_val_raw, y_val_true, clfName, model_dir="models", preproc_d
     preprocessor = None
     preproc_path = os.path.join(preproc_dir, f"{clfName}_preprocessor.save")
 
-    if clfName in ("rf", "svm", "knn", "ff", "tb"):
+    if clfName in ("rf", "rf_new", "svm", "knn", "ff", "tb"):
         if os.path.exists(preproc_path):
             preprocessor = pickle.load(open(preproc_path, 'rb'))
         else:
@@ -187,13 +217,14 @@ def evaluate_model(X_val_raw, y_val_true, clfName, model_dir="models", preproc_d
     print(f"========================================")
     print(f"Workflow rilevato: {'Preprocessor (Custom Pipeline)' if preprocessor is not None else 'Dati Raw'}")
 
-    if clfName == "rf":
+    if clfName in ("rf", "rf_new"):
         print(f"Parametri RF:")
         print(f" - n_estimators: {model.n_estimators}")
         print(f" - max_features: {model.max_features}")
         print(f" - criterion:    {model.criterion}")
         print(f" - max_depth:    {model.max_depth}")
         print(f" - class_weight: {model.class_weight}")
+        print(f" - min_samples_leaf: {model.min_samples_leaf}")
     elif clfName == "svm":
         m_iter = getattr(model, 'max_iter', 'Default')
         print(f"Parametri SVC: C={model.C}, kernel='{getattr(model, 'kernel', 'linear')}', max_iter={m_iter}")

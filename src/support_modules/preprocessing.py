@@ -147,7 +147,7 @@ class RoundToIntTransformer(BaseEstimator, TransformerMixin):
         return X
     
 
-# --- KNN / SVC ---
+# KNN / SVC
 class Winsorizer(BaseEstimator, TransformerMixin):
     def __init__(self, lower_quantile=0.01, upper_quantile=0.99):
         self.lower_quantile = lower_quantile
@@ -193,7 +193,7 @@ class SkewnessTransformer(BaseEstimator, TransformerMixin):
         return X
 
 
-# --- TabNet ---
+# TabNet
 class CategoricalImputer(BaseEstimator, TransformerMixin):
     def __init__(self):
         self.categorical_cols_ = None
@@ -353,7 +353,7 @@ class CompletePipelineTabNet:
 
 
 
-# --- Support Functions ---
+# Support Functions
 def remove_duplicates(df):
     print("\n Inizio rimozione duplicati...")
 

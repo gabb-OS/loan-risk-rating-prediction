@@ -17,10 +17,8 @@ from sklearn.metrics import (
 
 
 def drop_high_nan_columns(df, threshold):
-    # percentuale di NaN per colonna
     nan_ratio = df.isna().mean() * 100
 
-    # colonne da rimuovere
     cols_to_drop = nan_ratio[nan_ratio > threshold * 100].index.tolist()
 
     if cols_to_drop:
@@ -107,7 +105,6 @@ def print_nan(df, types=None, sort_by='nan', ascending=False, show_values=True):
             '_nan_perc': nan_perc,
         })
 
-    # --- Riga di riepilogo in cima ---
     n_cols_with_nan = len(data)
     cols_perc = n_cols_with_nan / n_total_cols * 100 if n_total_cols else 0
     print(f"Colonne con almeno un NaN: {n_cols_with_nan}/{n_total_cols} "
@@ -135,14 +132,11 @@ def print_nan(df, types=None, sort_by='nan', ascending=False, show_values=True):
 
 
 def calculate_outlier_percentage(df):
-    # Select numeric columns
     numeric_cols = df.select_dtypes(include=[np.number]).columns
 
-    # Create a list to store results
     results = []
 
     for col in numeric_cols:
-        # 1. Calculate IQR
         Q1 = df[col].quantile(0.25)
         Q3 = df[col].quantile(0.75)
         IQR = Q3 - Q1
@@ -150,11 +144,8 @@ def calculate_outlier_percentage(df):
         lower_bound = Q1 - 1.5 * IQR
         upper_bound = Q3 + 1.5 * IQR
 
-        # 2. Count Outliers
-        # An outlier is anything strictly less than lower OR strictly greater than upper
         n_outliers = df[(df[col] < lower_bound) | (df[col] > upper_bound)].shape[0]
 
-        # 3. Calculate Percentage
         total_rows = df.shape[0]
         percentage = (n_outliers / total_rows) * 100
 
@@ -166,10 +157,8 @@ def calculate_outlier_percentage(df):
             "Outliers %": round(percentage, 2)
         })
 
-    # Convert to DataFrame for a nice table display
     results_df = pd.DataFrame(results)
 
-    # Sort by percentage descending to see the "worst" columns first
     results_df = results_df.sort_values(by="Outliers %", ascending=False)
 
     return results_df
@@ -189,7 +178,6 @@ def evaluate_model(X_val_raw, y_val_true, clfName, model_dir="models", preproc_d
     preproc_dir : cartella dei file _preprocessor.save
     """
 
-    # 1. Caricamento del preprocessor
     preprocessor = None
     preproc_path = os.path.join(preproc_dir, f"{clfName}_preprocessor.save")
 
@@ -205,7 +193,6 @@ def evaluate_model(X_val_raw, y_val_true, clfName, model_dir="models", preproc_d
         print(f"clfName '{clfName}' non riconosciuto")
         return
 
-    # 2. Caricamento modello
     model_path = os.path.join(model_dir, f"{clfName}.save")
     if not os.path.exists(model_path):
         print(f"Errore: modello non trovato in '{model_path}'")
@@ -231,7 +218,6 @@ def evaluate_model(X_val_raw, y_val_true, clfName, model_dir="models", preproc_d
 
     print(f"----------------------------------------\n")
 
-    # 3. Trasformazione
     if preprocessor is not None:
         try:
             X_transformed = preprocessor.transform(X_val_raw)
@@ -242,16 +228,13 @@ def evaluate_model(X_val_raw, y_val_true, clfName, model_dir="models", preproc_d
     else:
         X_transformed = X_val_raw.values if hasattr(X_val_raw, "values") else X_val_raw
 
-    # 4. Predizione
     y_pred = model.predict(X_transformed)
 
-    # 5. Metriche
     print("CLASSIFICATION REPORT:")
     print(classification_report(y_val_true, y_pred))
     print(f"Accuracy Score:          {accuracy_score(y_val_true, y_pred):.4f}")
     print(f"Balanced Accuracy Score: {balanced_accuracy_score(y_val_true, y_pred):.4f}")
 
-    # 6. Matrice di confusione
     cm = confusion_matrix(y_val_true, y_pred)
     fig, ax = plt.subplots(figsize=(8, 6))
     colors = {'knn': 'Greens', 'svm': 'Blues', 'rf': 'Oranges'}
@@ -277,23 +260,16 @@ def apply_capping(df, lower_quantile, upper_quantile):
     Return:
     - DataFrame con i valori cappati.
     """
-    # Creiamo una copia per non modificare l'originale in-place
     df_capped = df.copy()
 
-    # Selezioniamo solo le colonne numeriche
     numerical_cols = df_capped.select_dtypes(include=['float', 'int']).columns
 
     for col in numerical_cols:
-        # Calcolo dei limiti
         lower_limit = df_capped[col].quantile(lower_quantile)
         upper_limit = df_capped[col].quantile(upper_quantile)
 
-        # Applicazione del capping (clipping)
-        # I valori < lower_limit diventano lower_limit
-        # I valori > upper_limit diventano upper_limit
         df_capped[col] = df_capped[col].clip(lower=lower_limit, upper=upper_limit)
 
-        # Opzionale: Stampa per vedere l'effetto (puoi commentarlo)
         print(f"Colonna '{col}': cappata tra {lower_limit:.2f} e {upper_limit:.2f}")
 
     return df_capped
@@ -301,11 +277,7 @@ def apply_capping(df, lower_quantile, upper_quantile):
 
 
 
-
-
-
 def identify_distributions(df, threshold_skew, threshold_peaks_prominence):
-    # 1 / 0.05
     """
     Identifica se le colonne numeriche sono Skewed, Multimodali, Uniformi o Normali.
     Restituisce un DataFrame con i risultati dell'analisi.
@@ -315,13 +287,11 @@ def identify_distributions(df, threshold_skew, threshold_peaks_prominence):
 
     for col in num_cols:
         data = df[col].dropna()
-        if len(data) < 50: continue # Salta colonne con troppi pochi dati
+        if len(data) < 50: continue
 
-        # 1. Check Skewness (Asimmetria)
         skew_val = data.skew()
         is_skewed = abs(skew_val) > threshold_skew
 
-        # 2. Check Normality (Test di D'Agostino's K-squared)
         try:
             k2, p_norm = stats.normaltest(data)
             # p_value > 0.01 e skewness bassa indicano normalità
@@ -329,26 +299,21 @@ def identify_distributions(df, threshold_skew, threshold_peaks_prominence):
         except:
             is_normal = False
 
-        # 3. Check Multimodality (Picchi nell'istogramma)
-        # Calcola la densità approssimata tramite istogramma
         counts, bin_edges = np.histogram(data, bins='auto', density=True)
-        # Trova picchi che siano rilevanti (almeno il 5% della densità massima)
+        # picchi rilevanti = prominenza >= 5% della densità massima
         peaks, _ = find_peaks(counts, prominence=np.max(counts) * threshold_peaks_prominence)
         num_peaks = len(peaks)
         is_multimodal = num_peaks > 1
 
-        # 4. Check Uniformity (Varianza delle frequenze)
-        # Se la deviazione standard delle frequenze nei bin è molto bassa, è uniforme
         counts_uni, _ = np.histogram(data, bins=20)
         cv = np.std(counts_uni) / np.mean(counts_uni)
-        is_uniform = cv < 0.2 # Soglia euristica: deviazione < 20% della media
+        is_uniform = cv < 0.2  # euristica: deviazione < 20% della media => uniforme
 
-        # Logica di Classificazione (Priorità)
         classification = "Unknown"
         if is_uniform:
             classification = "Uniform"
         elif is_multimodal and not is_skewed:
-             # Spesso le code lunghe creano falsi picchi, quindi diamo priorità allo skew
+             # le code lunghe creano falsi picchi, quindi diamo priorità allo skew
              classification = "Multimodal"
         elif is_skewed:
             classification = "Positively Skewed" if skew_val > 0 else "Negatively Skewed"
@@ -369,23 +334,18 @@ def identify_distributions(df, threshold_skew, threshold_peaks_prominence):
 
 
 
-
 def get_distribution_type(data, threshold_skew, threshold_peaks):
-    # 1/0.05z
     """
     Funzione helper per identificare il tipo di distribuzione di una singola Series.
     """
-    # Rimuoviamo NaN per l'analisi
     clean_data = data.dropna()
     if len(clean_data) < 50: return 'Other'
 
-    # 1. Calcolo Skewness
     skew_val = clean_data.skew()
 
-    # 2. Test Normalità (D'Agostino's K-squared test)
     try:
         k2, p_norm = stats.normaltest(clean_data)
-        # Se p > 0.01 e skewness è bassa, consideriamo "Normale"
+        # p > 0.01 e skewness bassa => "Normale"
         is_normal = (p_norm > 0.01) and (abs(skew_val) < 0.5)
     except:
         is_normal = False
@@ -393,18 +353,16 @@ def get_distribution_type(data, threshold_skew, threshold_peaks):
     if is_normal:
         return 'Normal'
 
-    # 3. Controllo Skewness (Priorità alta)
     if abs(skew_val) > threshold_skew:
         return 'Skewed'
 
-    # 4. Controllo Multimodalità (Picchi)
     counts, bin_edges = np.histogram(clean_data, bins='auto', density=True)
     peaks, _ = find_peaks(counts, prominence=np.max(counts) * threshold_peaks)
 
     if len(peaks) > 1:
         return 'Multimodal'
 
-    return 'Other' # Simmetrica ma non normale, o altro
+    return 'Other'  # simmetrica ma non normale, o altro
 
 def auto_transform_features(df):
     """
@@ -417,19 +375,14 @@ def auto_transform_features(df):
     num_cols = df_clean.select_dtypes(include=[np.number]).columns.tolist()
     scaler = StandardScaler()
 
-    # Report per tenere traccia delle modifiche
     report_list = []
 
     for col in num_cols:
-        # Identifica la distribuzione
         dist_type = get_distribution_type(df_clean[col])
         action = "Nessuna azione"
 
-        # --- LOGICA DI TRASFORMAZIONE ---
-
         if dist_type == 'Skewed':
-            # LOG TRANSFORMATION
-            # Gestione valori negativi/zero: trasliamo se necessario
+            # log: se ci sono valori <= 0 trasliamo per evitare log di non-positivi
             min_val = df_clean[col].min()
             if min_val <= 0:
                 offset = abs(min_val) + 1
@@ -440,23 +393,19 @@ def auto_transform_features(df):
                 action = "Log Transform"
 
         elif dist_type == 'Normal':
-            # Z-SCORE STANDARDIZATION
-            # Reshape necessario per StandardScaler (n_samples, 1)
+            # StandardScaler richiede shape (n_samples, 1)
             values = df_clean[col].values.reshape(-1, 1)
             df_clean[col] = scaler.fit_transform(values)
             action = "Z-Score Standardization"
 
         elif dist_type == 'Multimodal':
-            # BINNING
-            # Usiamo qcut per dividere in 5 quantili (0,1,2,3,4)
-            # duplicates='drop' gestisce casi in cui molti valori sono identici
+            # duplicates='drop' gestisce i casi con molti valori identici
             try:
                 df_clean[col] = pd.qcut(df_clean[col], q=5, labels=False, duplicates='drop')
                 action = "Binning (5 Quantiles)"
             except Exception as e:
                 action = f"Binning Fallito: {e}"
 
-        # Salviamo il report
         report_list.append({
             'Feature': col,
             'Tipo Rilevato': dist_type,
@@ -469,13 +418,11 @@ def auto_transform_features(df):
 
 
 
-
-
 def print_highly_correlated_numeric_features(df, threshold):
     numeric_df = df.select_dtypes(include=[np.number])
     corr_matrix = numeric_df.corr().abs()
 
-    # Triangolo superiore (esclude diagonale e duplicati)
+    # triangolo superiore (esclude diagonale e duplicati)
     upper_tri = corr_matrix.where(
         np.triu(np.ones(corr_matrix.shape), k=1).astype(bool)
     )
@@ -493,7 +440,6 @@ def print_highly_correlated_numeric_features(df, threshold):
                 for idx in high_corr.index
             ]
 
-    # ---- PRINT ----
     if not correlations_dict:
         print(f"Nessuna correlazione trovata sopra la soglia di {threshold}")
     else:
@@ -506,34 +452,30 @@ def print_highly_correlated_numeric_features(df, threshold):
 
 
 
-
-
 def round_features_to_int(df, features):
     """
     Arrotonda all'intero più vicino i valori delle feature specificate.
-    
+
     Parametri:
     -----------
     df : pd.DataFrame
         Il DataFrame da processare
     features : list
         Lista di nomi delle colonne da arrotondare
-    
+
     Ritorna:
     --------
     pd.DataFrame
         DataFrame con le feature arrotondate
     """
-    # Crea una copia del DataFrame per non modificare l'originale
     df_rounded = df.copy()
-    
-    # Arrotonda ogni feature nella lista
+
     for feature in features:
         if feature in df_rounded.columns:
             df_rounded[feature] = np.round(df_rounded[feature]).astype('Int64')
         else:
             print(f"Warning: '{feature}' non trovata nel DataFrame")
-    
+
     return df_rounded
 
 
@@ -544,7 +486,7 @@ def drop_constant_columns(df):
     """
     constant_cols = [col for col in df.columns if df[col].nunique(dropna=False) <= 1]
     df.drop(columns=constant_cols, inplace=True)
-    
+
     print("\n--- Report Colonne Costanti ---")
     if constant_cols:
         for col in constant_cols:

@@ -58,7 +58,7 @@ def preprocess(dataset, clfName):
     elif clfName == "tb":
         preprocessor = pickle.load(open("tb_preprocessor.save", 'rb'))
     elif clfName == "tf":
-        print("Model not trained")
+        print("Modello non implementato")
 
     if preprocessor is not None:
         try:

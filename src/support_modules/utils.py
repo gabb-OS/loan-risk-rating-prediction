@@ -15,22 +15,6 @@ from sklearn.metrics import (
     classification_report,
 )
 
-
-def drop_high_nan_columns(df, threshold):
-    nan_ratio = df.isna().mean() * 100
-
-    cols_to_drop = nan_ratio[nan_ratio > threshold * 100].index.tolist()
-
-    if cols_to_drop:
-        print(f"Colonne rimosse (> {threshold*100}% NaN):")
-        print(cols_to_drop)
-    else:
-        print("Nessuna colonna rimossa.")
-
-    return df.drop(columns=cols_to_drop)
-
-
-
 def print_high_nan_columns(df, threshold):
     min_valid_values = (1-threshold)*len(df)
 
@@ -48,17 +32,6 @@ def print_nan(df, types=None, sort_by='nan', ascending=False, show_values=True):
     """
     Esplora i NaN (e opzionalmente i valori univoci) per ogni feature.
     Mostra solo le colonne che contengono almeno un valore NaN.
-
-    Parametri
-    ---------
-    types : list o None
-        Tipi da includere (es. ['number', 'object']). None = tutte le colonne.
-    sort_by : str
-        Caratteristica su cui ordinare: 'feature', 'type', 'nan', 'perc', 'uniques'.
-    ascending : bool
-        Ordine crescente (True) o decrescente (False).
-    show_values : bool
-        Se True mostra la colonna con i valori univoci, altrimenti la nasconde.
     """
     sort_map = {
         'feature':  'Feature',
@@ -130,52 +103,10 @@ def print_nan(df, types=None, sort_by='nan', ascending=False, show_values=True):
 
     return
 
-
-def calculate_outlier_percentage(df):
-    numeric_cols = df.select_dtypes(include=[np.number]).columns
-
-    results = []
-
-    for col in numeric_cols:
-        Q1 = df[col].quantile(0.25)
-        Q3 = df[col].quantile(0.75)
-        IQR = Q3 - Q1
-
-        lower_bound = Q1 - 1.5 * IQR
-        upper_bound = Q3 + 1.5 * IQR
-
-        n_outliers = df[(df[col] < lower_bound) | (df[col] > upper_bound)].shape[0]
-
-        total_rows = df.shape[0]
-        percentage = (n_outliers / total_rows) * 100
-
-        results.append({
-            "Column": col,
-            "Lower Cutoff": round(lower_bound, 2),
-            "Upper Cutoff": round(upper_bound, 2),
-            "Outliers Count": n_outliers,
-            "Outliers %": round(percentage, 2)
-        })
-
-    results_df = pd.DataFrame(results)
-
-    results_df = results_df.sort_values(by="Outliers %", ascending=False)
-
-    return results_df
-
-
 def evaluate_model(X_val_raw, y_val_true, clfName, model_dir="models", preproc_dir="preprocessing"):
     """
     Valuta il modello applicando ESATTAMENTE la stessa pipeline di preprocessing
     usata in training (stessa logica di preprocess()).
-
-    Parametri
-    ---------
-    X_val_raw : DataFrame delle feature di validazione (grezze, non trasformate)
-    y_val_true : target di validazione (già label-encoded, coerente col training)
-    clfName : 'rf', 'svm', 'knn', 'ff', 'tb', 'tt'
-    model_dir : cartella dei file .save del modello
-    preproc_dir : cartella dei file _preprocessor.save
     """
 
     preprocessor = None
@@ -243,181 +174,6 @@ def evaluate_model(X_val_raw, y_val_true, clfName, model_dir="models", preproc_d
     plt.title(f'Confusion Matrix - {clfName.upper()}')
     plt.show()
 
-
-
-
-def apply_capping(df, lower_quantile, upper_quantile):
-    """
-    Applica la tecnica del Capping (Winsorization) alle colonne numeriche di un DataFrame.
-    I valori sotto il lower_quantile vengono sostituiti con il valore del lower_quantile.
-    I valori sopra l'upper_quantile vengono sostituiti con il valore dell'upper_quantile.
-
-    Parametri:
-    - df: DataFrame in input
-    - lower_quantile: soglia inferiore (default 0.01 -> 1%)
-    - upper_quantile: soglia superiore (default 0.99 -> 99%)
-
-    Return:
-    - DataFrame con i valori cappati.
-    """
-    df_capped = df.copy()
-
-    numerical_cols = df_capped.select_dtypes(include=['float', 'int']).columns
-
-    for col in numerical_cols:
-        lower_limit = df_capped[col].quantile(lower_quantile)
-        upper_limit = df_capped[col].quantile(upper_quantile)
-
-        df_capped[col] = df_capped[col].clip(lower=lower_limit, upper=upper_limit)
-
-        print(f"Colonna '{col}': cappata tra {lower_limit:.2f} e {upper_limit:.2f}")
-
-    return df_capped
-
-
-
-
-def identify_distributions(df, threshold_skew, threshold_peaks_prominence):
-    """
-    Identifica se le colonne numeriche sono Skewed, Multimodali, Uniformi o Normali.
-    Restituisce un DataFrame con i risultati dell'analisi.
-    """
-    results = []
-    num_cols = df.select_dtypes(include=[np.number]).columns.tolist()
-
-    for col in num_cols:
-        data = df[col].dropna()
-        if len(data) < 50: continue
-
-        skew_val = data.skew()
-        is_skewed = abs(skew_val) > threshold_skew
-
-        try:
-            k2, p_norm = stats.normaltest(data)
-            # p_value > 0.01 e skewness bassa indicano normalità
-            is_normal = (p_norm > 0.01) and (abs(skew_val) < 0.5)
-        except:
-            is_normal = False
-
-        counts, bin_edges = np.histogram(data, bins='auto', density=True)
-        # picchi rilevanti = prominenza >= 5% della densità massima
-        peaks, _ = find_peaks(counts, prominence=np.max(counts) * threshold_peaks_prominence)
-        num_peaks = len(peaks)
-        is_multimodal = num_peaks > 1
-
-        counts_uni, _ = np.histogram(data, bins=20)
-        cv = np.std(counts_uni) / np.mean(counts_uni)
-        is_uniform = cv < 0.2  # euristica: deviazione < 20% della media => uniforme
-
-        classification = "Unknown"
-        if is_uniform:
-            classification = "Uniform"
-        elif is_multimodal and not is_skewed:
-             # le code lunghe creano falsi picchi, quindi diamo priorità allo skew
-             classification = "Multimodal"
-        elif is_skewed:
-            classification = "Positively Skewed" if skew_val > 0 else "Negatively Skewed"
-        elif is_normal:
-            classification = "Normal"
-        else:
-             classification = "Symmetric (Non-Normal)"
-
-        results.append({
-            'Feature': col,
-            'Skewness': round(skew_val, 2),
-            'Num_Peaks': num_peaks,
-            'Classification': classification
-        })
-
-    return pd.DataFrame(results)
-
-
-
-
-def get_distribution_type(data, threshold_skew, threshold_peaks):
-    """
-    Funzione helper per identificare il tipo di distribuzione di una singola Series.
-    """
-    clean_data = data.dropna()
-    if len(clean_data) < 50: return 'Other'
-
-    skew_val = clean_data.skew()
-
-    try:
-        k2, p_norm = stats.normaltest(clean_data)
-        # p > 0.01 e skewness bassa => "Normale"
-        is_normal = (p_norm > 0.01) and (abs(skew_val) < 0.5)
-    except:
-        is_normal = False
-
-    if is_normal:
-        return 'Normal'
-
-    if abs(skew_val) > threshold_skew:
-        return 'Skewed'
-
-    counts, bin_edges = np.histogram(clean_data, bins='auto', density=True)
-    peaks, _ = find_peaks(counts, prominence=np.max(counts) * threshold_peaks)
-
-    if len(peaks) > 1:
-        return 'Multimodal'
-
-    return 'Other'  # simmetrica ma non normale, o altro
-
-def auto_transform_features(df):
-    """
-    Analizza ogni colonna numerica e applica la trasformazione:
-    - Skewed -> Log Transformation
-    - Normal -> Z-Score Standardization
-    - Multimodal -> Binning (5 Quantiles)
-    """
-    df_clean = df.copy()
-    num_cols = df_clean.select_dtypes(include=[np.number]).columns.tolist()
-    scaler = StandardScaler()
-
-    report_list = []
-
-    for col in num_cols:
-        dist_type = get_distribution_type(df_clean[col])
-        action = "Nessuna azione"
-
-        if dist_type == 'Skewed':
-            # log: se ci sono valori <= 0 trasliamo per evitare log di non-positivi
-            min_val = df_clean[col].min()
-            if min_val <= 0:
-                offset = abs(min_val) + 1
-                df_clean[col] = np.log(df_clean[col] + offset)
-                action = f"Log Transform (Shifted +{offset})"
-            else:
-                df_clean[col] = np.log(df_clean[col])
-                action = "Log Transform"
-
-        elif dist_type == 'Normal':
-            # StandardScaler richiede shape (n_samples, 1)
-            values = df_clean[col].values.reshape(-1, 1)
-            df_clean[col] = scaler.fit_transform(values)
-            action = "Z-Score Standardization"
-
-        elif dist_type == 'Multimodal':
-            # duplicates='drop' gestisce i casi con molti valori identici
-            try:
-                df_clean[col] = pd.qcut(df_clean[col], q=5, labels=False, duplicates='drop')
-                action = "Binning (5 Quantiles)"
-            except Exception as e:
-                action = f"Binning Fallito: {e}"
-
-        report_list.append({
-            'Feature': col,
-            'Tipo Rilevato': dist_type,
-            'Trasformazione': action
-        })
-
-    report_df = pd.DataFrame(report_list)
-    return df_clean, report_df
-
-
-
-
 def print_highly_correlated_numeric_features(df, threshold):
     numeric_df = df.select_dtypes(include=[np.number])
     corr_matrix = numeric_df.corr().abs()
@@ -455,18 +211,6 @@ def print_highly_correlated_numeric_features(df, threshold):
 def round_features_to_int(df, features):
     """
     Arrotonda all'intero più vicino i valori delle feature specificate.
-
-    Parametri:
-    -----------
-    df : pd.DataFrame
-        Il DataFrame da processare
-    features : list
-        Lista di nomi delle colonne da arrotondare
-
-    Ritorna:
-    --------
-    pd.DataFrame
-        DataFrame con le feature arrotondate
     """
     df_rounded = df.copy()
 
@@ -477,21 +221,3 @@ def round_features_to_int(df, features):
             print(f"Warning: '{feature}' non trovata nel DataFrame")
 
     return df_rounded
-
-
-
-def drop_constant_columns(df):
-    """
-    Rimuove le colonne che hanno un solo valore univoco in tutto il dataset.
-    """
-    constant_cols = [col for col in df.columns if df[col].nunique(dropna=False) <= 1]
-    df.drop(columns=constant_cols, inplace=True)
-
-    print("\n--- Report Colonne Costanti ---")
-    if constant_cols:
-        for col in constant_cols:
-            print(f"Dropping colonna costante: {col}")
-    else:
-       print("Nessuna colonna monovalore trovata.")
-
-    return

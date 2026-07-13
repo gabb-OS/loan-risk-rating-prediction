@@ -7,7 +7,7 @@ from sklearn.preprocessing import LabelEncoder
 import pickle
 
 class ColumnDropper(BaseEstimator, TransformerMixin):
-    """ Drop generic columns """
+    """ Rimuove colonne generiche """
     def __init__(self, columns=[]):
         self.columns = columns
 

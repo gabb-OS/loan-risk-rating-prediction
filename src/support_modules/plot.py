@@ -6,7 +6,7 @@ import os
 
 
 def plot_nan(df):
-    """Plot stacked barh with % of NaN vs present values per feature"""
+    """Grafico a barre orizzontali con % di NaN vs valori presenti per feature"""
 
     df_plot = pd.DataFrame({
         'Presenti (%)': (df.notna().mean() * 100),
@@ -38,7 +38,7 @@ def plot_nan(df):
 
 
 def plot_feature_distribution(df_feature, feature_name):
-    """ Plot distribution of a given feature with percentages on top of bars """
+    """ Distribuzione di una feature con le percentuali """
 
     if not isinstance(df_feature, pd.Series):
         df_feature = pd.Series(df_feature)
@@ -64,96 +64,9 @@ def plot_feature_distribution(df_feature, feature_name):
     plt.tight_layout()
     plt.show()
 
-
-def plot_outliers_analyze_boxplot(df):
-    numeric_cols = df.select_dtypes(include=[np.number]).columns
-
-    if len(numeric_cols) == 0:
-        print("No numerical columns found!")
-        return
-
-    fig, axes = plt.subplots(len(numeric_cols), 1, figsize=(10, 4 * len(numeric_cols)))
-
-    # con una sola colonna subplots restituisce un Axes singolo, non una lista
-    if len(numeric_cols) == 1:
-        axes = [axes]
-
-    print(f"{'Column':<20} | {'Lower Cutoff':<15} | {'Upper Cutoff':<15}")
-    print("-" * 55)
-
-    for i, col in enumerate(numeric_cols):
-        ax = axes[i]
-
-        Q1 = df[col].quantile(0.25)
-        Q3 = df[col].quantile(0.75)
-        IQR = Q3 - Q1
-
-        lower_bound = Q1 - 1.5 * IQR
-        upper_bound = Q3 + 1.5 * IQR
-
-        print(f"{col:<20} | {lower_bound:<15.2f} | {upper_bound:<15.2f}")
-
-        ax.boxplot(df[col].dropna(), vert=False, patch_artist=True,
-                   boxprops=dict(facecolor='lightblue', color='blue'),
-                   medianprops=dict(color='red', linewidth=2))
-
-        ax.axvline(lower_bound, color='orange', linestyle='--', linewidth=1.5, label='Lower Limit')
-        ax.axvline(upper_bound, color='orange', linestyle='--', linewidth=1.5, label='Upper Limit')
-
-        ax.set_title(f"Distribution & Cutoffs: {col}")
-        ax.set_xlabel("Value")
-        ax.legend()
-        ax.grid(True, linestyle=':', alpha=0.5)
-
-    plt.tight_layout()
-    plt.show()
-
-
-def plot_outliers_scatter(df):
-    """
-    Genera automaticamente i plot per ogni feature del DataFrame.
-    - Scatter plot per variabili numeriche (con linee di media e deviazione standard).
-    - Bar chart per variabili categoriche.
-    """
-    numerical_cols = df.select_dtypes(include=['number']).columns
-    categorical_cols = df.select_dtypes(include=['object', 'category']).columns
-
-    for col in df.columns:
-        plt.figure(figsize=(10, 4))
-
-        if col in numerical_cols:
-            plt.scatter(x=df.index, y=df[col], alpha=0.5)
-
-            mean = df[col].mean()
-            std = df[col].std()
-
-            plt.axhline(mean + 3*std, color='r', linestyle='--', label='Media + 3SD')
-            plt.axhline(mean - 3*std, color='r', linestyle='--', label='Media - 3SD')
-            plt.axhline(mean, color='g', linestyle='-', label='Media')
-
-            plt.legend()
-            plt.title(f"Distribuzione Numerica: {col}")
-            plt.ylabel("Valore")
-            plt.xlabel("Indice")
-
-        else:
-            df[col].value_counts().plot(kind='bar', color='orange')
-            plt.title(f"Frequenze Categoriche: {col}")
-            plt.ylabel("Conteggio")
-            plt.xlabel("Categoria")
-            plt.xticks(rotation=45, ha='right')
-
-        plt.grid(True, linestyle=':', alpha=0.6)
-        plt.tight_layout()
-        plt.show()
-
 def plot_top_correlations_split(X, y, n=30):
     """
     Calcola e visualizza la correlazione tra X_train e y_train.
-
-    Parameters:
-    X (pd.DataFrame): Il set delle feature (X_train).
-    y (pd.Series): Il target (y_train) contenente i gradi 'A', 'B', ecc.
     """
     grade_map = {'A': 1, 'B': 2, 'C': 3, 'D': 4, 'E': 5, 'F': 6, 'G': 7}
     y_numeric = y.map(grade_map)
@@ -184,83 +97,6 @@ def plot_top_correlations_split(X, y, n=30):
     plt.tight_layout()
     plt.show()
 
-
-def visualize_rf_tree(model_input, X_train, y_train, max_depth=3, tree_index=0):
-    """
-    Visualizza un singolo albero da un modello Random Forest.
-    model_input: può essere il percorso del file .save o l'oggetto modello/pipeline.
-    """
-    try:
-        if isinstance(model_input, str):
-            if not os.path.exists(model_input):
-                print(f"Errore: Il file '{model_input}' non esiste.")
-                return
-            with open(model_input, "rb") as f:
-                model = pickle.load(f)
-        else:
-            model = model_input
-
-        # GridSearchCV/Pipeline avvolgono il classificatore sotto 'clf'
-        if hasattr(model, 'named_steps'):
-            clf = model.named_steps.get('clf', model)
-        elif hasattr(model, 'best_estimator_'):
-            clf = model_input.best_estimator_
-            if hasattr(clf, 'named_steps'): clf = clf.named_steps.get('clf', clf)
-        else:
-            clf = model
-
-        if not hasattr(clf, 'estimators_'):
-            print("Errore: Il modello fornito non sembra essere una Random Forest o non è ancora addestrato.")
-            return
-
-        feature_names = X_train.columns.tolist()
-        class_names = [str(c) for c in sorted(np.unique(y_train))]
-
-        tree_to_plot = clf.estimators_[tree_index]
-
-        plt.figure(figsize=(25, 12))
-        plot_tree(tree_to_plot,
-                  max_depth=max_depth,
-                  feature_names=feature_names,
-                  class_names=class_names,
-                  filled=True,
-                  rounded=True,
-                  proportion=True,
-                  fontsize=10)
-
-        plt.title(f"Albero n. {tree_index} della Random Forest (Profondità visualizzata: {max_depth})", fontsize=16)
-        plt.show()
-
-    except Exception as e:
-        print(f"Errore durante la visualizzazione dell'albero: {e}")
-
-
-def plot_knn_error_rate(grid_search_obj, param_name='n_neighbors'):
-    """
-    Visualizza l'andamento dello score al variare di un parametro (es. n_neighbors)
-    basandosi sui risultati cv_results_ di GridSearchCV.
-    """
-    results = grid_search_obj.cv_results_
-
-    param_key = next((k for k in results.keys() if param_name in k and 'param_' in k), None)
-
-    if not param_key:
-        print(f"Parametro {param_name} non trovato nei risultati della GridSearch.")
-        return
-
-    means = results['mean_test_score']
-    params = results[param_key].data.astype(int)
-
-    plt.figure(figsize=(10, 6))
-    plt.plot(params, means, linestyle='--', marker='o', color='blue')
-    plt.title(f'Andamento Accuracy vs {param_name}')
-    plt.xlabel(f'{param_name} (K)')
-    plt.ylabel('Mean CV Accuracy')
-    plt.grid(True)
-    plt.show()
-
-
-
 def analyze_feature_distributions(df, save_plots=False, output_folder="plots_analysis"):
     """
     Genera una dashboard di analisi per ogni feature del DataFrame.
@@ -273,10 +109,6 @@ def analyze_feature_distributions(df, save_plots=False, output_folder="plots_ana
     Per le variabili CATEGORICHE (o numeriche con bassa cardinalità) genera:
       1. Bar chart delle frequenze.
 
-    Args:
-        df (pd.DataFrame): Il dataframe di input.
-        save_plots (bool): Se True, salva i grafici in una cartella invece di mostrarli.
-        output_folder (str): Nome della cartella di output (creata se non esiste).
     """
 
     if save_plots and not os.path.exists(output_folder):
@@ -327,60 +159,10 @@ def analyze_feature_distributions(df, save_plots=False, output_folder="plots_ana
     if save_plots:
         print(f"Tutti i grafici sono stati salvati in '{output_folder}'.")
 
-
-def plot_feature_importance(model_input, feature_names, top_n=20, title="Top Feature Importance"):
-    """
-    Estrae e visualizza le feature più importanti di una Random Forest.
-    """
-    model = None
-
-    if isinstance(model_input, str):
-        with open(model_input, "rb") as f:
-            model = pickle.load(f)
-    else:
-        model = model_input
-
-    # estrae il classificatore 'clf' se il modello e' una Pipeline
-    if hasattr(model, 'named_steps'):
-        clf = model.named_steps.get('clf', model.steps[-1][1])
-    else:
-        clf = model
-
-    if not hasattr(clf, 'feature_importances_'):
-        print("Errore: Il modello non supporta feature_importances_ (non è un modello basato su alberi).")
-        return
-
-    importances = clf.feature_importances_
-
-    fi_df = pd.DataFrame({
-        'Feature': feature_names,
-        'Importance': importances
-    }).sort_values(by='Importance', ascending=False)
-
-    plt.figure(figsize=(10, 8))
-    sns.barplot(x='Importance', y='Feature', data=fi_df.head(top_n), palette='viridis')
-
-    plt.title(f"{title} (Top {top_n})", fontsize=15)
-    plt.xlabel("Importanza (Gini Impurity Decrease)")
-    plt.ylabel("Variabili")
-    plt.grid(axis='x', linestyle='--', alpha=0.7)
-    plt.show()
-
-    return fi_df
-
-
 def plot_leakage_evidence(x_series, y_series, title=None, xlabel=None, ylabel=None, save_path=None):
     """
     Genera un grafico combinato (Boxplot + Strip Plot) per visualizzare
     la correlazione/leakage tra una feature categorica e una numerica.
-
-    Args:
-        x_series (pd.Series): La feature categorica (es. X['grade'] o target y)
-        y_series (pd.Series): La feature numerica (es. X['loan_interest_rate'])
-        title (str): Titolo del grafico.
-        xlabel (str): Etichetta asse X. Se None, usa il nome della serie.
-        ylabel (str): Etichetta asse Y. Se None, usa il nome della serie.
-        save_path (str): Se specificato, salva il grafico in questo percorso (es. 'plot.png').
     """
 
     df_temp = pd.DataFrame({

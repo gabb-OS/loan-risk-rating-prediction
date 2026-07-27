@@ -56,11 +56,11 @@ other_leakage = [
     'original_projected_additional_accrued_interest',           # interesse addizionale previsto, presumibilmente in seguito a modifiche di piani ammortamento o hardship
     #'loan_issue_date',                                         # Il grade è influenzato dalla situazione creditizia del richiedente, più che dal periodo
                                                                 # droppato in un secondo momento, dopo averlo usato per feature extraction
-    'investor_side_funded_amount',
-    'loan_portfolio_total_funded',
 ]
 
 other_non_significant = [
+    'investor_side_funded_amount',
+    'loan_portfolio_total_funded',
     'platform_policy_code_id',                                      # id interno al prestatore
     'loan_title',                                                   # non significant column, grande sparsita' di dati. Sufficiente loan_purpose_category come aggregazione di scopo del prestito
     'borrower_address_zip',                                         # non significant column, esiste una colonna per identificazione stati
@@ -176,13 +176,15 @@ fill_big_cols = [
     'months_since_last_delinquency', 
     'months_since_recent_inquiry', 
     'months_since_recent_bankcard',
-    'months_since_recent_trade_line'
+    'months_since_recent_trade_line',
+    'months_since_recent_installment_loan', 
+    'months_since_recent_revolving_acct'
 ]
 
 fill_zero_cols = [
     'open_accounts_6m', 'open_installment_loans_12m', 'open_installment_loans_24m',
     'open_revolving_accounts_12m', 'open_revolving_accounts_24m',
-    'finance_inquiries', 'credit_inquiries_12m', 'credit_union_trades_total',
+    'finance_inquiries', 'credit_inquiries_12m', 'credit_inquiries_6m', 'credit_union_trades_total',
     'open_active_installment_loans', 'tradelines_open_past_12m', 'accounts_open_past_24m',
     'open_revolving_tradelines', 'active_bankcard_tradelines', 'installment_tradelines',
     'revolving_accounts', 'bankcard_satisfactory_accounts', 'active_revolving_tradelines', 
@@ -190,7 +192,7 @@ fill_zero_cols = [
     'tradelines_120dpd_2m', 'tradelines_30dpd', 'tradelines_90dpd_24m',
     'accounts_ever_120dpd', 'chargeoffs_within_12m', 'collections_12m_ex_med',
     'accounts_now_delinquent', 'public_record_bankruptcies', 'credit_public_records',
-    'credit_delinquencies_2yrs', 'tax_liens_total', 'borrower_profile_employment_length'
+    'credit_delinquencies_2yrs', 'tax_liens_total', 'borrower_profile_employment_length', 'mortgage_accounts'
 ]
 
 fill_to_mode_cat = [

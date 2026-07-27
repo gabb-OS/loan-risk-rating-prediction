@@ -12,7 +12,6 @@ from support_modules.utils import *
 from support_modules.preprocessing import *
 from support_modules.ff_utils import *
 
-# ========== SKLEARN PER OUTPUT PANDAS ==========
 from sklearn import set_config
 set_config(transform_output="pandas")
 
@@ -26,28 +25,23 @@ Il campo clfName è una stringa con i seguenti valori ammissibili:
 - 'tf' → identificare classificatore con reti neurali, architettura TabTransformer
 '''
 
-# Output: unique ID of the team
 def getName():
     return MY_UNIQUE_ID
 
 
-# Input: Dataset dictionary and classifier name
-# Output: PreProcessed Dataset dictionary
 def preprocess(dataset, clfName):
 
-    # Da dizionario in input a dataframe
     data = pd.DataFrame.from_dict(dataset)
 
-    # Drop duplicates
     df_undup = remove_duplicates(data)
 
-    # Split
     X = df_undup.drop(columns=["grade"])
     y = df_undup["grade"]
 
-    # Encoding Label 
     le = LabelEncoder()
-    y = le.fit_transform(y)
+    # hardcoding delle label per usare lo stesso mapping del train
+    le.classes_ = np.array(["A", "B", "C", "D", "E", "F", "G"])
+    y = le.transform(y)
 
 
     dataset_processed = {}
@@ -63,9 +57,8 @@ def preprocess(dataset, clfName):
         preprocessor = pickle.load(open("ff_preprocessor.save", 'rb'))
     elif clfName == "tb":
         preprocessor = pickle.load(open("tb_preprocessor.save", 'rb'))
-    elif clfName == "tt":
-        #preprocessor = pickle.load(open("tt_preprocessor.save", 'rb'))
-        print("Model not trained")
+    elif clfName == "tf":
+        print("Modello non implementato")
 
     if preprocessor is not None:
         try:
@@ -83,8 +76,6 @@ def preprocess(dataset, clfName):
     return dataset_processed
 
 
-# Input: Classifier name ("svc": Support Vector Classifier, ecc)
-# Output: Classifier object
 def load(clfName):
     device = getDevice()
     clf = None
@@ -108,31 +99,27 @@ def load(clfName):
         clf.load_state_dict(checkpoint)
     elif clfName == "tb":
         clf = TabNetClassifier()
-        clf.load_model('tabnet_best_model.zip')
-    elif clfName == "tt":
-        print("TabNet not implementata")
+        clf.load_model('tb.zip')
+    elif clfName == "tf":
+        print("TabTransformer non implementata")
         clf = None
 
     return clf
 
 
-# Input: PreProcessed Dataset dictionary, Classifier Name, Classifier Object 
-# Output: Performance dictionary
 def predict(dataset, clf):
     X = dataset['data']
     y = dataset['grade']
-    
+
     if isinstance(clf, FeedForward_NN):
         device = getDevice()
         clf.eval()
-        
-        # Converti in tensore PyTorch
+
         if isinstance(X, pd.DataFrame):
             X_tensor = torch.FloatTensor(X.values).to(device)
         else:
             X_tensor = torch.FloatTensor(X).to(device)
         
-        # Predizione senza calcolare gradienti
         with torch.no_grad():
             outputs = clf(X_tensor)
             _, ypred = torch.max(outputs, 1)
@@ -142,10 +129,9 @@ def predict(dataset, clf):
         ypred = clf.predict(X)
     
     else:
-        # Sklearn classificatori (KNN, RF, SVM)
+        # classificatori sklearn (KNN, RF, SVM)
         ypred = clf.predict(X)
 
-    # Calcola le metriche
     acc = accuracy_score(y, ypred)
     bacc = balanced_accuracy_score(y, ypred)
     f1 = f1_score(y, ypred, average="weighted")

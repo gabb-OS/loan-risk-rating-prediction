@@ -12,36 +12,27 @@ def getDevice():
         print("No GPU acceleration available.")
         device = torch.device("cpu")
 
+    return device
 
 class FeedForward_NN(nn.Module):
     def __init__(self, input_size, num_classes, hidden_size, dropout_rate, depth=1):
-        super(FeedForward_NN, self).__init__()
+        super().__init__()
 
-        model = [
-            nn.Linear(input_size, hidden_size),
-            nn.BatchNorm1d(hidden_size),
-            nn.ReLU(),
-            nn.Dropout(p=dropout_rate)
-        ]
+        def block(in_features, out_features):
+            return [
+                nn.Linear(in_features, out_features),
+                nn.BatchNorm1d(out_features),
+                nn.ReLU(),
+                nn.Dropout(p=dropout_rate),
+            ]
 
-        block = [
-            nn.Linear(hidden_size, hidden_size),
-            nn.BatchNorm1d(hidden_size),
-            nn.ReLU(),
-            nn.Dropout(p=dropout_rate)
-        ]
+        layers = block(input_size, hidden_size)
+        for _ in range(depth - 1):
+            layers += block(hidden_size, hidden_size)
 
-        for i in range(depth):
-            model += block
-
-        self.model = nn.Sequential(*model)
-
+        self.model = nn.Sequential(*layers)
         self.output = nn.Linear(hidden_size, num_classes)
 
-
     def forward(self, x):
-        h = self.model(x)
-        out = self.output(h)
-        return out
-    
+        return self.output(self.model(x))
 

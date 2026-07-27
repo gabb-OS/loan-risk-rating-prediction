@@ -7,7 +7,7 @@ from sklearn.preprocessing import LabelEncoder
 import pickle
 
 class ColumnDropper(BaseEstimator, TransformerMixin):
-    """ Drop generic columns """
+    """ Rimuove colonne generiche """
     def __init__(self, columns=[]):
         self.columns = columns
 
@@ -45,7 +45,7 @@ class HighlyCorrelatedDropper(BaseEstimator, TransformerMixin):
     def fit(self, X, y=None):
         numeric_df = X.select_dtypes(include=[np.number])
         corr_matrix = numeric_df.corr().abs()
-        # Selezioniamo il triangolo superiore della matrice; k=1 esclude la diagonale principale
+        # triangolo superiore, k=1 esclude la diagonale
         upper_tri = corr_matrix.where(np.triu(np.ones(corr_matrix.shape), k=1).astype(bool))
         self.columns = [column for column in upper_tri.columns if any(upper_tri[column] > self.threshold)]
         return self
@@ -86,7 +86,6 @@ class FeatureAverager(BaseEstimator, TransformerMixin):
 
     def transform(self, X):
         X = X.copy()
-        # Calcoliamo la media lungo l'asse delle righe (axis=1)
         valid_cols = [col for col in self.columns if col in X.columns]
         if valid_cols:
             X[self.new_name] = X[valid_cols].mean(axis=1)
@@ -104,14 +103,12 @@ class DateDifferenceTransformer(BaseEstimator, TransformerMixin):
 
     def transform(self, X):
         X = X.copy()
-        
-        # Check if reference exists
+
         if self.reference_col not in X.columns:
-            return X # Skip if ref is missing (maybe dropped by NaN filter)
+            return X  # la ref potrebbe essere stata droppata dal filtro NaN
 
         ref_series = pd.to_datetime(X[self.reference_col], format=self.date_format, errors='coerce')
-        
-        # Ensure targets is a list and filter for existence
+
         targets = [self.target_cols] if isinstance(self.target_cols, str) else self.target_cols
         valid_targets = [col for col in targets if col in X.columns]
         
@@ -128,9 +125,7 @@ class DateDifferenceTransformer(BaseEstimator, TransformerMixin):
             X[new_col_name] = np.round(X[new_col_name]).astype('Int64')
             cols_to_drop.append(col)
 
-        # Drop columns
         all_drops = cols_to_drop + [self.reference_col]
-        # Final safety check before drop
         X = X.drop(columns=[c for c in all_drops if c in X.columns], errors='ignore')
 
         return X
@@ -152,9 +147,7 @@ class RoundToIntTransformer(BaseEstimator, TransformerMixin):
         return X
     
 
-# ============================================================================== 
-#  K-Nearest Neighbors (KNN) - SVC
-# ==============================================================================
+# KNN / SVC
 class Winsorizer(BaseEstimator, TransformerMixin):
     def __init__(self, lower_quantile=0.01, upper_quantile=0.99):
         self.lower_quantile = lower_quantile
@@ -200,9 +193,7 @@ class SkewnessTransformer(BaseEstimator, TransformerMixin):
         return X
 
 
-# ============================================================================== 
 # TabNet
-# ==============================================================================
 class CategoricalImputer(BaseEstimator, TransformerMixin):
     def __init__(self):
         self.categorical_cols_ = None
@@ -301,7 +292,6 @@ class CompletePipelineTabNet:
         self.structure_pipeline = structure_pipeline
         self.random_state = random_state
         
-        # Initialize preprocessing steps
         self.cat_imputer = CategoricalImputer()
         self.num_imputer = NumericalMedianImputer()
         self.label_encoder = CategoricalLabelEncoder()
@@ -327,7 +317,6 @@ class CompletePipelineTabNet:
         if not self.is_fitted_:
             raise ValueError("La Pipeline deve essere fittata prima del transform.")
         
-        # Apply all transformations
         X_transformed = self.structure_pipeline.transform(X)
         X_transformed = self.cat_imputer.transform(X_transformed)
         X_transformed = self.num_imputer.transform(X_transformed)
@@ -364,9 +353,7 @@ class CompletePipelineTabNet:
 
 
 
-# ============================================================================== 
 # Support Functions
-# ==============================================================================
 def remove_duplicates(df):
     print("\n Inizio rimozione duplicati...")
 
@@ -381,7 +368,6 @@ def remove_duplicates(df):
     else:
         df_undup = df
 
-    # Rimuovi righe duplicate
     df_undup = df_undup.drop_duplicates()
 
     print("\n Fine rimozione duplicati.")
